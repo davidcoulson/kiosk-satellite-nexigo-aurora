@@ -27,6 +27,14 @@
       "group": "Projector"
     },
     {
+      "key": "stayOn",
+      "type": "boolean",
+      "title": "Stay on when the source sleeps",
+      "description": "Keeps the projector on the network around the clock: ignores the CEC standby a sleeping Apple TV or console broadcasts and turns off the no-signal shutdown. Pair it with an automation that turns Picture off when the source sleeps. Turning this off does not restore the projector's own settings.",
+      "default": true,
+      "group": "Projector"
+    },
+    {
       "key": "channel",
       "type": "select",
       "title": "Run commands through",

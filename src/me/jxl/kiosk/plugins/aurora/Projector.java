@@ -64,6 +64,18 @@ final class Projector {
         return "am start -n " + SETTINGS_ACTIVITY;
     }
 
+    /** No-signal shutdown off ("Close" in the projector's menu; 1-5 are 5, 10, 15, 30 and 60 min). */
+    static final int NO_SIGNAL_OFF = 0;
+
+    /**
+     * Keep the projector on the network: ignore the CEC standby a sleeping source broadcasts
+     * (the Apple TV's "Control TVs and receivers" does), and turn off the no-signal shutdown.
+     * The property is the vendor's own switch; the setting needs WRITE_SECURE_SETTINGS, so it
+     * may fail on the direct channel and is reported from the read-back instead.
+     */
+    static final String STAY_ON_SCRIPT = "setprop persist.appo.ignore.cec.standby true;"
+        + " settings put global no_signal_auto_power_off " + NO_SIGNAL_OFF + " 2>/dev/null; true";
+
     /** Proves the channel can run the tool and read properties; the first thing a session does. */
     static final String PROBE_SCRIPT = "test -x " + TOOL + " && getprop ro.product.model";
 
@@ -78,7 +90,10 @@ final class Projector {
         + " echo \"mode=$(settings get global picture_mode 2>/dev/null)\";"
         + " echo \"minutes=$(" + TOOL + " getPlatformProperty laser_used_time_wdt 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
         + " echo \"temps=$(logcat -d -t 600 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\";"
-        + " echo \"leds=$(cat /sys/class/appo_led_pwm_pm/appo_led_pwm_pm/led_pwm 2>/dev/null)\"";
+        + " echo \"leds=$(cat /sys/class/appo_led_pwm_pm/appo_led_pwm_pm/led_pwm 2>/dev/null)\";"
+        + " echo \"boot=$(settings get global boot_source_id 2>/dev/null)\";"
+        + " echo \"cec=$(getprop persist.appo.ignore.cec.standby)\";"
+        + " echo \"nosignal=$(settings get global no_signal_auto_power_off 2>/dev/null)\"";
 
     /** The light engine's NTC names as the HAL logs them, and the entity keys they become. */
     static final String[][] TEMPERATURES = {
@@ -100,9 +115,19 @@ final class Projector {
         Integer pictureMode;
         Long laserMinutes;
         Integer ledPwm;
+        Integer bootSourceId;
+        Boolean ignoreCecStandby;
+        Integer noSignalOff;
         final Map<String, Double> temperatures = new LinkedHashMap<>();
 
-        String input() { return label(INPUTS, INPUT_IDS, sourceId); }
+        /** The vendor sets cur.prj.currentSourceId only from its own source menu; after a boot it
+         *  is the boot source until then. */
+        String input() { return label(INPUTS, INPUT_IDS, sourceId != null ? sourceId : bootSourceId); }
+        /** Both guards in place: CEC standby ignored and the no-signal shutdown off. */
+        Boolean staysOn() {
+            if (ignoreCecStandby == null && noSignalOff == null) return null;
+            return Boolean.TRUE.equals(ignoreCecStandby) && noSignalOff != null && noSignalOff == NO_SIGNAL_OFF;
+        }
         String pictureModeLabel() { return label(PICTURE_MODES, PICTURE_MODE_IDS, pictureMode); }
     }
 
@@ -122,10 +147,16 @@ final class Projector {
                 case "mode": s.pictureMode = integer(value); break;
                 case "minutes": { Integer m = integer(value); if (m != null) s.laserMinutes = m.longValue(); break; }
                 case "leds": s.ledPwm = integer(value); break;
+                case "boot": s.bootSourceId = integer(value); break;
+                case "cec": s.ignoreCecStandby = bool(value); break;
+                case "nosignal": s.noSignalOff = integer(value); break;
                 case "temps": parseTemperatures(value, s); break;
                 default: break;
             }
         }
+        // A fresh boot has set neither flag yet, and a projector that just booted has its light
+        // on: that is the one case the properties cannot describe, so it is read as on.
+        if (s.light == null && s.screenOff == null) { s.light = Boolean.TRUE; s.screenOff = Boolean.FALSE; }
         return s;
     }
 

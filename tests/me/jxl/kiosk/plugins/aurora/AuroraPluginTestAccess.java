@@ -15,7 +15,8 @@ public final class AuroraPluginTestAccess {
 
     static final String POLL_ANSWER =
         "light=true\nscreenoff=false\nsource=6\nmode=8\nminutes=1530\n"
-        + "temps=AT+Temperature#NtcRedLaser1:28,NtcGreenLaser1:25,NtcBlueLaser1:34,NtcCw1:33,NtcDmd1:37,NtcEnv1:23\nleds=0\n";
+        + "temps=AT+Temperature#NtcRedLaser1:28,NtcGreenLaser1:25,NtcBlueLaser1:34,NtcCw1:33,NtcDmd1:37,NtcEnv1:23\nleds=0\n"
+        + "boot=5\ncec=true\nnosignal=0\n";
 
     /** Records every script and answers the poll with a canned projector. */
     static final class FakeShell implements Shell.Runner {
@@ -74,7 +75,11 @@ public final class AuroraPluginTestAccess {
         assert s.temperatures.get("NtcDmd1") == 37.0 && s.temperatures.size() == 6 : "temps";
         assert s.ledPwm == 0 : "leds";
         Projector.State empty = Projector.parse("light=\nsource=\nmode=\nminutes=\ntemps=\n");
-        assert empty.light == null && empty.input() == null && empty.pictureModeLabel() == null && empty.laserMinutes == null && empty.temperatures.isEmpty() : "unknowns";
+        assert Boolean.TRUE.equals(empty.light) && Boolean.FALSE.equals(empty.screenOff) : "a fresh boot reads as picture on";
+        assert empty.input() == null && empty.pictureModeLabel() == null && empty.laserMinutes == null && empty.temperatures.isEmpty() && empty.staysOn() == null : "unknowns";
+        Projector.State booted = Projector.parse("source=\nboot=5\ncec=false\nnosignal=4\n");
+        assert "HDMI 1".equals(booted.input()) && Boolean.FALSE.equals(booted.staysOn()) : "boot source and guards";
+        assert Boolean.TRUE.equals(s.staysOn()) : "stays on";
         Projector.State odd = Projector.parse("source=99\nmode=6\n");
         assert odd.sourceId == 99 && odd.input() == null && odd.pictureMode == 6 && odd.pictureModeLabel() == null : "unmapped ids stay unknown";
         assert Projector.pictureScript(false).equals(
@@ -92,6 +97,8 @@ public final class AuroraPluginTestAccess {
         });
         plugin.start(host, settings("Auto", 30));
         waitFor(host, "picture");
+        assert shell.scripts.contains(Projector.STAY_ON_SCRIPT) : "stay-on guards applied at start";
+        assert Boolean.TRUE.equals(host.binary.get("stays_on")) : "stays on";
         assert Boolean.TRUE.equals(host.switches.get("picture")) : "switch from light flag";
         assert "HDMI 2".equals(host.selects.get("input")) : "input select";
         assert "Cinema Pro".equals(host.selects.get("picture_mode")) : "mode select";
@@ -121,6 +128,13 @@ public final class AuroraPluginTestAccess {
         plugin.onEvent("select.input", Collections.<String, Object>singletonMap("option", "HDMI 3"));
         waitScripts(shell, before + 2);
         assert shell.scripts.get(before).endsWith("HW7") : "input script";
+        assert "HDMI 3".equals(host.selects.get("input")) : "input shows what was commanded, since the projector does not report it";
+        shell.pollAnswer = POLL_ANSWER.replace("source=6", "source=7");
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitScripts(shell, shell.scripts.size() + 1);
+        Thread.sleep(100);
+        assert "HDMI 3".equals(host.selects.get("input")) : "the projector's menu changing the source wins: " + host.selects.get("input");
+        shell.pollAnswer = POLL_ANSWER;
 
         before = shell.scripts.size();
         plugin.onEvent("select.picture_mode", Collections.<String, Object>singletonMap("option", "Game"));
@@ -180,6 +194,7 @@ public final class AuroraPluginTestAccess {
         Map<String, Object> m = new HashMap<>();
         m.put("channel", channel);
         m.put("pollSeconds", poll);
+        m.put("stayOn", true);
         return m;
     }
 

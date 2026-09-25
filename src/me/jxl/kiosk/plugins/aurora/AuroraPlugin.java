@@ -42,6 +42,12 @@ public final class AuroraPlugin implements KioskPlugin {
     private final ShizukuFactory shizukuFactory;
     private Projector.State last = new Projector.State();
     private boolean switchPublished;
+    /** The input last selected through this plugin: the pass-through URI does not update the
+     *  vendor's property, so this is what Input shows until a read says otherwise. */
+    private String commandedInput;
+    /** What cur.prj.currentSourceId said when that input was commanded; a later change means
+     *  the projector's own menu was used and wins. */
+    private Integer sourceAtCommand;
 
     /** How the Shizuku runner is made, so tests can hand in their own. */
     interface ShizukuFactory {
@@ -75,6 +81,7 @@ public final class AuroraPlugin implements KioskPlugin {
         host.publishSelect("input", "Input", Projector.INPUTS, null);
         host.publishSelect("picture_mode", "Picture mode", Projector.PICTURE_MODES, null);
         host.publishBinarySensor("screen_off", "Screen off", "", null);
+        host.publishBinarySensor("stays_on", "Stays on when the source sleeps", "", null);
         host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1), null);
         submit(new Task() { @Override public void run() { detect(); } });
         schedule();
@@ -110,6 +117,14 @@ public final class AuroraPlugin implements KioskPlugin {
             Integer hw = Projector.idFor(Projector.INPUTS, Projector.INPUT_IDS, payload.get("option"));
             if (hw == null) throw new IllegalArgumentException("Unknown input");
             script = Projector.inputScript(hw);
+            final String chosen = String.valueOf(payload.get("option"));
+            submit(new Task() { @Override public void run() {
+                Shell.Result r = runner == null ? Shell.Result.failure("no channel") : runner.run(script, Shell.DEFAULT_TIMEOUT_MS);
+                if (r.ok()) { commandedInput = chosen; sourceAtCommand = last.sourceId; }
+                else status("Input failed via " + channelName + ": " + r.why(), true);
+                poll();
+            } });
+            return;
         } else if (event.equals("select.picture_mode")) {
             Integer mode = Projector.idFor(Projector.PICTURE_MODES, Projector.PICTURE_MODE_IDS, payload.get("option"));
             if (mode == null) throw new IllegalArgumentException("Unknown picture mode");
@@ -153,6 +168,7 @@ public final class AuroraPlugin implements KioskPlugin {
                 return;
             }
         }
+        if (Boolean.TRUE.equals(settings.get("stayOn"))) runner.run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         poll();
     }
 
@@ -176,7 +192,9 @@ public final class AuroraPlugin implements KioskPlugin {
             host.publishSwitch("picture", "Picture", s.light);
             switchPublished = true;
         }
-        host.publishSelect("input", "Input", Projector.INPUTS, s.input());
+        if (commandedInput != null && s.sourceId != null && !s.sourceId.equals(sourceAtCommand)) commandedInput = null;
+        host.publishSelect("input", "Input", Projector.INPUTS, commandedInput != null ? commandedInput : s.input());
+        host.publishBinarySensor("stays_on", "Stays on when the source sleeps", "", s.staysOn());
         host.publishSelect("picture_mode", "Picture mode", Projector.PICTURE_MODES, s.pictureModeLabel());
         host.publishBinarySensor("screen_off", "Screen off", "", s.screenOff);
         host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1),
@@ -191,11 +209,17 @@ public final class AuroraPlugin implements KioskPlugin {
         }
         StringBuilder text = new StringBuilder();
         text.append(s.light == null ? "Picture unknown" : (s.light ? "Picture on" : (Boolean.TRUE.equals(s.screenOff) ? "Screen off" : "Picture off")));
-        if (s.input() != null) text.append(" · ").append(s.input());
+        String input = commandedInput != null ? commandedInput : s.input();
+        if (input != null) text.append(" · ").append(input);
         if (s.pictureModeLabel() != null) text.append(" · ").append(s.pictureModeLabel());
         if (s.laserMinutes != null) text.append(String.format(Locale.ROOT, " · %.1f laser hours", s.laserMinutes / 60.0));
         Double dmd = s.temperatures.get("NtcDmd1");
         if (dmd != null) text.append(String.format(Locale.ROOT, " · DMD %.0f °C", dmd));
+        if (Boolean.TRUE.equals(settings.get("stayOn")) && Boolean.FALSE.equals(s.staysOn())) {
+            text.append(s.noSignalOff != null && s.noSignalOff != Projector.NO_SIGNAL_OFF
+                ? " · no-signal shutdown still on (needs Shizuku or `pm grant ... WRITE_SECURE_SETTINGS` once)"
+                : " · CEC standby not ignored yet");
+        }
         text.append(" · via ").append(channelName);
         if (!switchPublished) text.append(". The Picture switch appears once the light state has been read.");
         status(text.toString(), false);
