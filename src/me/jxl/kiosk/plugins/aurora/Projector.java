@@ -76,6 +76,9 @@ final class Projector {
     static final String STAY_ON_SCRIPT = "setprop persist.appo.ignore.cec.standby true;"
         + " settings put global no_signal_auto_power_off " + NO_SIGNAL_OFF + " 2>/dev/null; true";
 
+    /** Re-asserts the deliberate-dark flag alone; see AuroraPlugin.poll. */
+    static final String REFLAG_SCREEN_OFF_SCRIPT = "setprop cur.prj.screenOff true";
+
     /** Proves the channel can run the tool and read properties; the first thing a session does. */
     static final String PROBE_SCRIPT = "test -x " + TOOL + " && getprop ro.product.model";
 

@@ -45,6 +45,8 @@ public final class AuroraPlugin implements KioskPlugin {
     /** The input last selected through this plugin: the pass-through URI does not update the
      *  vendor's property, so this is what Input shows until a read says otherwise. */
     private String commandedInput;
+    /** Whether the last picture command from here was "off": the flag below is kept for it. */
+    private boolean commandedPictureOff;
     /** What cur.prj.currentSourceId said when that input was commanded; a later change means
      *  the projector's own menu was used and wins. */
     private Integer sourceAtCommand;
@@ -108,8 +110,8 @@ public final class AuroraPlugin implements KioskPlugin {
         final String script;
         switch (command) {
             case "settings": script = Projector.openSettingsScript(); break;
-            case "pictureOff": script = Projector.pictureScript(false); break;
-            case "pictureOn": script = Projector.pictureScript(true); break;
+            case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; break;
+            case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; break;
             case "ledsOff": script = Projector.ledsScript(false); break;
             case "ledsOn": script = Projector.ledsScript(true); break;
             case "refresh": script = null; break;
@@ -124,6 +126,7 @@ public final class AuroraPlugin implements KioskPlugin {
             Object on = payload.get("on");
             if (!(on instanceof Boolean)) throw new IllegalArgumentException("Picture wants a boolean");
             script = Projector.pictureScript((Boolean) on);
+            commandedPictureOff = !(Boolean) on;
         } else if (event.equals("select.input")) {
             Integer hw = Projector.idFor(Projector.INPUTS, Projector.INPUT_IDS, payload.get("option"));
             if (hw == null) throw new IllegalArgumentException("Unknown input");
@@ -204,6 +207,12 @@ public final class AuroraPlugin implements KioskPlugin {
         fill(s, "picture_mode", "mode");
         fill(s, "boot_source_id", "boot");
         fill(s, "no_signal_auto_power_off", "nosignal");
+        // Android waking its display (a Kiosk Satellite restart does it) clears cur.prj.screenOff
+        // while the light stays off. The flag is what tells the vendor's services the dark is
+        // deliberate, so when this plugin turned the picture off it puts the flag back.
+        if (commandedPictureOff && Boolean.FALSE.equals(s.light) && Boolean.FALSE.equals(s.screenOff)) {
+            if (runner.run(Projector.REFLAG_SCREEN_OFF_SCRIPT, 4000).ok()) s.screenOff = Boolean.TRUE;
+        }
         publish(s);
     }
 

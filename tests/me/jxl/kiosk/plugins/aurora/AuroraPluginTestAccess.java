@@ -128,6 +128,15 @@ public final class AuroraPluginTestAccess {
         assert shell.scripts.get(before).equals(Projector.pictureScript(false)) : "switch off script";
         assert shell.scripts.get(before + 1).equals(Projector.POLL_SCRIPT) : "a read follows every command";
 
+        // The flag lost while the light stays off: put back, and the sensor says so.
+        shell.pollAnswer = POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=false");
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitScripts(shell, shell.scripts.size() + 2);
+        Thread.sleep(100);
+        assert shell.scripts.contains(Projector.REFLAG_SCREEN_OFF_SCRIPT) : "screen-off flag re-asserted";
+        assert Boolean.TRUE.equals(host.binary.get("screen_off")) : "sensor reflects the re-asserted flag";
+        shell.pollAnswer = POLL_ANSWER;
+
         before = shell.scripts.size();
         plugin.onEvent("select.input", Collections.<String, Object>singletonMap("option", "HDMI 3"));
         waitScripts(shell, before + 2);
