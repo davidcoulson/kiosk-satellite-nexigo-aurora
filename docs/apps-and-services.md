@@ -114,6 +114,8 @@ Reversible with `pm enable <package>`; none of it needs root.
 | `com.zeasn.whale.saas` | Telemetry: posts the MAC, model and build fingerprint to `log.saas.zeasn.tv`. |
 | `com.ecloud.eshare.server`, `com.ecloud.eairplay`, `com.ecloud.emedia`, `com.allshare.chromcast.castapp`, `com.appo.miracast` | The EShare/AppoFly, AirPlay, DLNA, Chromecast and Miracast receivers: five always-on services with open LAN ports (1106, 7100, 8000, 8008/8009, 8082, 8121), none of them used when an Apple TV is the source. |
 | `com.appo.fotaupgrade` | The OTA client. Everything in this repository depends on this exact firmware (permissive SELinux, `projector-test`, the property names); updates are now a deliberate act. |
+| `com.appo.loghelper`, `com.mediatek.TimeMeasurementAgent` | An always-running log collector (no upload endpoint found; USB/local) and MediaTek's boot-time profiler. |
+| `cn.wps.moffice_i18n_TV`, `com.appotronics.demo`, `fusion.android.tv.demo`, `com.zeasn.audiodemo` | WPS Office and three demo apps: idle bloat. |
 
 Also `settings put secure screensaver_enabled 0`: Android's clock daydream is one more reason for
 the laser to be on. Afterwards only ADB (5555) and one Android system port listen on all
