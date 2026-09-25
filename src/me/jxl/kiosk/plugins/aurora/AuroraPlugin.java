@@ -47,6 +47,8 @@ public final class AuroraPlugin implements KioskPlugin {
     private String commandedInput;
     /** Whether the last picture command from here was "off": the flag below is kept for it. */
     private boolean commandedPictureOff;
+    /** The bar cannot be read back; this is what was last asked of it. */
+    private String commandedLeds;
     /** What cur.prj.currentSourceId said when that input was commanded; a later change means
      *  the projector's own menu was used and wins. */
     private Integer sourceAtCommand;
@@ -95,6 +97,7 @@ public final class AuroraPlugin implements KioskPlugin {
         host.publishSelect("picture_mode", "Picture mode", Projector.PICTURE_MODES, null);
         host.publishBinarySensor("screen_off", "Screen off", "", null);
         host.publishBinarySensor("stays_on", "Stays on when the source sleeps", "", null);
+        host.publishSelect("front_leds", "Front LEDs", Projector.LEDS, null);
         host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1), null);
         submit(new Task() { @Override public void run() { detect(); } });
         schedule();
@@ -110,14 +113,32 @@ public final class AuroraPlugin implements KioskPlugin {
         final String script;
         switch (command) {
             case "settings": script = Projector.openSettingsScript(); break;
-            case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; break;
-            case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; break;
-            case "ledsOff": script = Projector.ledsScript(false); break;
-            case "ledsOn": script = Projector.ledsScript(true); break;
+            case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; ledsForPicture(false); break;
+            case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; ledsForPicture(true); break;
+            case "ledsOff": leds("Off"); return;
+            case "ledsOn": leds("Standby"); return;
             case "refresh": script = null; break;
             default: throw new IllegalArgumentException("Unknown command " + command);
         }
         submit(new Task() { @Override public void run() { if (script != null) command(script, command); poll(); } });
+    }
+
+    /** Sets the bar to one of the named patterns and remembers it; the bar has no readback. */
+    private void leds(final String label) {
+        final Integer id = Projector.idFor(Projector.LEDS, Projector.LED_IDS, label);
+        if (id == null) throw new IllegalArgumentException("Unknown LED pattern");
+        submit(new Task() { @Override public void run() {
+            if (runner == null) { status("No channel to the projector; check the plugin's settings.", true); return; }
+            Shell.Result r = runner.run(Projector.ledsScript(id), Shell.DEFAULT_TIMEOUT_MS);
+            if (r.ok()) { commandedLeds = label; host.publishSelect("front_leds", "Front LEDs", Projector.LEDS, label); }
+            else status("Front LEDs failed via " + channelName + ": " + r.why(), true);
+        } });
+    }
+
+    /** With "LEDs follow the picture" on, a picture change brings the bar along: standby lights
+     *  while it is dark, nothing while it shows. */
+    private void ledsForPicture(boolean pictureOn) {
+        if (Boolean.TRUE.equals(settings.get("ledsFollowPicture"))) leds(pictureOn ? "Off" : "Standby");
     }
 
     @Override public void onEvent(String event, Map<String, Object> payload) {
@@ -127,6 +148,7 @@ public final class AuroraPlugin implements KioskPlugin {
             if (!(on instanceof Boolean)) throw new IllegalArgumentException("Picture wants a boolean");
             script = Projector.pictureScript((Boolean) on);
             commandedPictureOff = !(Boolean) on;
+            ledsForPicture((Boolean) on);
         } else if (event.equals("select.input")) {
             Integer hw = Projector.idFor(Projector.INPUTS, Projector.INPUT_IDS, payload.get("option"));
             if (hw == null) throw new IllegalArgumentException("Unknown input");
@@ -138,6 +160,9 @@ public final class AuroraPlugin implements KioskPlugin {
                 else status("Input failed via " + channelName + ": " + r.why(), true);
                 poll();
             } });
+            return;
+        } else if (event.equals("select.front_leds")) {
+            leds(String.valueOf(payload.get("option")));
             return;
         } else if (event.equals("select.picture_mode")) {
             Integer mode = Projector.idFor(Projector.PICTURE_MODES, Projector.PICTURE_MODE_IDS, payload.get("option"));

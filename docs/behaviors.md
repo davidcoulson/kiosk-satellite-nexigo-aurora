@@ -103,8 +103,10 @@ HAL logs `Lap appo led str on/off` and reads `/sys/class/appo_led_pwm_pm/appo_le
 (0 while the picture is off). From the shell: `projector-test setAppoLeds 2 6` (off),
 `2 0` (power-on pattern), `2 2` (standby pattern). A global enable lives in the unify key
 `appo_led_str` (1/0) and eMMC env `appo_led_off` (`DeviceManager.setLedEnabled`); the projector
-settings expose it as the LED indicator switch. The bar is on in standby and off while the picture
-is on or screen-off, as observed; the `setAppoLeds` calls above are decoded but not yet tested.
+settings expose it as the LED indicator switch. Verified on the bar: `2 0` and `2 5` animate
+(boot / loop), `2 4` is blue (Bluetooth), `2 3` green (update), `2 2` the standby lights, `2 6`
+off. The bar has no readback (`led_pwm` stays 0 through all of them). The plugin uses `2 2` while
+the picture is off and `2 6` while it is on.
 
 ## Blank screen (settings app)
 

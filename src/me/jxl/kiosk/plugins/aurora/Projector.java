@@ -29,9 +29,14 @@ final class Projector {
     /** Settings.Global picture_mode values on the Aurora Pro. */
     static final int[] PICTURE_MODE_IDS = {2, 8, 9, 3, 10, 0};
 
-    /** Front LED bar statuses for {@code setAppoLeds 2 <status>} (APPO_LED_STATUS). */
-    static final int LED_POWER_ON = 0;
+    /**
+     * Front LED bar patterns: {@code setAppoLeds 2 <APPO_LED_STATUS>}, verified on the bar.
+     * "Standby" is what the projector shows in real standby; "Power on" is the boot animation.
+     */
+    static final String[] LEDS = {"Off", "Standby", "Power on", "Loop", "Bluetooth", "Update"};
+    static final int[] LED_IDS = {6, 2, 0, 5, 4, 3};
     static final int LED_OFF = 6;
+    static final int LED_STANDBY = 2;
 
     /**
      * The power menu's "Screen off", step for step: flag the light as deliberately off, tell the
@@ -45,8 +50,8 @@ final class Projector {
             + " && setprop cur.prj.screenOff " + (on ? "false" : "true");
     }
 
-    static String ledsScript(boolean on) {
-        return TOOL + " setAppoLeds 2 " + (on ? LED_POWER_ON : LED_OFF);
+    static String ledsScript(int status) {
+        return TOOL + " setAppoLeds 2 " + status;
     }
 
     /** Selects an HDMI port by opening the TV input framework's pass-through URI. */

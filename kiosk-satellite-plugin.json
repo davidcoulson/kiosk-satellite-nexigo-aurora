@@ -35,6 +35,14 @@
       "group": "Projector"
     },
     {
+      "key": "ledsFollowPicture",
+      "type": "boolean",
+      "title": "Front LEDs follow the picture",
+      "description": "When the picture goes off from here the front bar shows the projector's standby lights, and it goes dark again when the picture comes back. The Front LEDs select still sets any pattern by hand.",
+      "default": true,
+      "group": "Projector"
+    },
+    {
       "key": "channel",
       "type": "select",
       "title": "Run commands through",
@@ -63,7 +71,7 @@
     },
     {
       "id": "ledsOn",
-      "title": "Front LEDs on"
+      "title": "Front LEDs: standby lights"
     },
     {
       "id": "refresh",

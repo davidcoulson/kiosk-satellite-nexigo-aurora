@@ -89,7 +89,8 @@ public final class AuroraPluginTestAccess {
             "setprop cur.appo.light.enabled false && /vendor/bin/hw/projector-test setLightSourceOnOff false && setprop cur.prj.screenOff true") : "off recipe order";
         assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false") : "on recipe";
         assert Projector.inputScript(7).endsWith("HW7") : "input uri";
-        assert Projector.ledsScript(false).endsWith("setAppoLeds 2 6") && Projector.ledsScript(true).endsWith("setAppoLeds 2 0") : "leds";
+        assert Projector.ledsScript(Projector.LED_OFF).endsWith("setAppoLeds 2 6") && Projector.ledsScript(Projector.LED_STANDBY).endsWith("setAppoLeds 2 2") : "leds";
+        assert Projector.idFor(Projector.LEDS, Projector.LED_IDS, "Bluetooth") == 4 : "led table";
     }
 
     static void publication() throws Exception {
@@ -124,9 +125,12 @@ public final class AuroraPluginTestAccess {
         // Off the projector there is no framework, so the plugin falls through to the channel.
 
         plugin.onEvent("switch.picture", Collections.<String, Object>singletonMap("on", false));
-        waitScripts(shell, before + 2);
-        assert shell.scripts.get(before).equals(Projector.pictureScript(false)) : "switch off script";
-        assert shell.scripts.get(before + 1).equals(Projector.POLL_SCRIPT) : "a read follows every command";
+        waitScripts(shell, before + 3);
+        assert shell.scripts.get(before).equals(Projector.ledsScript(Projector.LED_STANDBY)) : "the bar follows the picture off: " + shell.scripts.get(before);
+        assert shell.scripts.get(before + 1).equals(Projector.pictureScript(false)) : "switch off script";
+        assert shell.scripts.get(before + 2).equals(Projector.POLL_SCRIPT) : "a read follows every command";
+        Thread.sleep(100);
+        assert "Standby".equals(host.selects.get("front_leds")) : "leds select shows what was commanded";
 
         // The flag lost while the light stays off: put back, and the sensor says so.
         shell.pollAnswer = POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=false");
@@ -166,8 +170,12 @@ public final class AuroraPluginTestAccess {
 
         before = shell.scripts.size();
         plugin.execute("ledsOff", Collections.<String, Object>emptyMap());
-        waitScripts(shell, before + 2);
+        waitScripts(shell, before + 1);
         assert shell.scripts.get(before).endsWith("setAppoLeds 2 6") : "leds off";
+        before = shell.scripts.size();
+        plugin.onEvent("select.front_leds", Collections.<String, Object>singletonMap("option", "Bluetooth"));
+        waitScripts(shell, before + 1);
+        assert shell.scripts.get(before).endsWith("setAppoLeds 2 4") : "leds select";
 
         plugin.stop();
         int after = shell.scripts.size();
@@ -226,6 +234,7 @@ public final class AuroraPluginTestAccess {
         m.put("channel", channel);
         m.put("pollSeconds", poll);
         m.put("stayOn", true);
+        m.put("ledsFollowPicture", true);
         return m;
     }
 
