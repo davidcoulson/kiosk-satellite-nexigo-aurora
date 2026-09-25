@@ -289,11 +289,8 @@ public final class AuroraPlugin implements KioskPlugin {
         return r.ok() && r.stdout.contains("uid=2000");
     }
 
-    private int adbPort() {
-        Object v = settings.get("adbPort");
-        int port = v instanceof Number ? ((Number) v).intValue() : 5555;
-        return port >= 1 && port <= 65535 ? port : 5555;
-    }
+    /** adbd's port on the stock firmware; a manifest number setting for it was refused by the host's range check. */
+    private int adbPort() { return 5555; }
 
     private void command(String script, String what) {
         if (runner == null) { status("No channel to the projector; check the plugin's settings.", true); return; }

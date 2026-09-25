@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Plugin 0.2.0: a loopback ADB channel. The stock firmware leaves adbd on port 5555 with no
+- Plugin 0.2.1 (0.2.0's port setting was refused by the host): a loopback ADB channel. The stock firmware leaves adbd on port 5555 with no
   key, so the plugin talks to it from the kiosk process itself: in Auto it reads the log (the
   temperatures) behind the direct channel and carries everything when direct access is refused,
   and it starts Shizuku after a reboot for the plugins that want it. No Shizuku needed for the
