@@ -45,3 +45,24 @@ Every physical key also produces the vendor broadcast `com.appo.action.keydown` 
 
 `input keyevent` does **not** fire `com.appo.action.keydown` (that comes from the input HAL path), so
 it will not wake a Screen off by itself; send the on recipe.
+
+## The bundled remote
+
+Measured with `getevent -l -c 24 /dev/input/event2` ("Aurora Pro Remote", a Bluetooth HID
+remote; `event1` is the MStar keypad, `event0` the IR receiver). Each press is six events
+(scan code, key down, sync; scan code, key up, sync).
+
+| Button | HID usage | Linux key | Android key |
+| --- | --- | --- | --- |
+| Home | `0c:0223` | `KEY_HOMEPAGE` | `KEYCODE_HOME` (3) |
+| Gear | `07:003d` | `KEY_F4` | `KEYCODE_F4` (134) |
+| Menu | `07:0065` | `KEY_COMPOSE` | `KEYCODE_MENU` (82) |
+
+Home goes to the default launcher only when an ordinary activity is in front: the MediaTek TV
+input activity that shows HDMI keeps it, and the gear opens the vendor's settings surface.
+Projectivy Launcher's own "Remote control" page can rebind these, but only as a Premium
+feature, and Premium is sold through Google Play billing, which this projector cannot run. An
+enabled accessibility service with `flagRequestFilterKeyEvents` sees every hardware key before
+the foreground app and can redirect them; `enabled_accessibility_services` already lists
+Projectivy's `ProjectivyAccessibilityService`, so any second service must be appended with a
+`:` rather than written over it.
