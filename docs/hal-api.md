@@ -22,7 +22,7 @@ plain strings; the on/off functions take `true`/`false`, the numeric ones decima
 | `setPanel`, `setDLP_LookMode`, `set3DMode` | ints | DLP panel / look / 3D. |
 | `setAudioMode`, `setHsg`, `setSegmentRGBY`, `setCurrentRGBY`, `setKeyStoneTable`, `setDBEnable`, `setDBScope` | ... | Colour, laser current, keystone, dynamic black. Calibration territory. |
 | `setUsbFunc`, `setUsbSel0Ctrl` | int | USB routing. |
-| `setPlatformProperty`, `getPlatformProperty` | key [value] | The HAL's own key/value store (SQLite). |
+| `setPlatformProperty`, `getPlatformProperty` | key [value] | The HAL's own key/value store (SQLite). `used_time` is the lifetime light-source minutes; `laser_used_time_wdt` the minutes since they were last folded in. |
 | `getVersion`, `GetHdmiColorDepth`, `getSegmentRGBY`, `readSocReg`, `writeSocReg` | | Diagnostics. |
 
 The tool has no getters for the light source, temperatures or hours; those come from the Java API

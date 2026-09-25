@@ -67,7 +67,7 @@ appears in Home Assistant as an ESPHome device. This plugin adds the projector t
 | **Picture mode** | select | Cinema Home, Cinema Pro, Standard, Brightest, Game, Custom (`picture_mode`). Read through the framework; written through the framework when Kiosk Satellite holds `WRITE_SECURE_SETTINGS`, else through Shizuku. |
 | **Screen off** | binary sensor | `cur.prj.screenOff`: the dark is deliberate. |
 | **Stays on when the source sleeps** | binary sensor | Both guards in place: CEC standby ignored and the no-signal shutdown off. The plugin sets them at start (the no-signal setting needs the permission above). |
-| **Laser hours** | sensor | From the HAL's own counter (`laser_used_time_wdt`). |
+| **Laser hours** | sensor | The lifetime light-source counter from the HAL's own store (`getPlatformProperty used_time`, minutes; the value the projector's menu shows). |
 | **Red/Green/Blue laser, Colour wheel, DMD, Ambient temperature** | sensors | The light engine's NTCs, from its 30-second report in the log. Only with Shizuku (reading the log needs the shell user); a temperature is published once it has been seen. |
 
 and six actions, which Kiosk Satellite can put in its drawer, on a gesture or on the Home
@@ -111,7 +111,9 @@ Releases are built by GitHub Actions from a `v<version>` tag, as Kiosk Satellite
 ## Status
 
 Verified on one Aurora Pro, firmware above. The plugin runs on the projector's Kiosk Satellite
-and its Picture switch has been driven from Home Assistant: the projector logs the serial
+(installed through Remote Admin's `installPlugin` API) alongside Device Performance, Network
+Diagnostics, Network ADB and Package Management, and its Picture switch has been driven from
+Home Assistant: the projector logs the serial
 command, the flags follow, and the switch and Screen-off sensor confirm - through the direct
 channel, no Shizuku. With the stay-on guards the projector stayed on the network through the
 Apple TV sleeping (it used to stand by 19 s after). Inputs and picture modes were verified over
