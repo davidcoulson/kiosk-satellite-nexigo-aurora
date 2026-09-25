@@ -238,10 +238,11 @@ public final class AuroraPluginTestAccess {
         return m;
     }
 
+    /** publish() writes the switch first and the status line last, so wait for the status too. */
     static void waitFor(FakeHost host, String switchKey) throws InterruptedException {
         long deadline = System.currentTimeMillis() + 3000;
-        while (!host.switches.containsKey(switchKey) && System.currentTimeMillis() < deadline) Thread.sleep(20);
-        assert host.switches.containsKey(switchKey) : "the first read never published " + switchKey + "; status: " + host.status;
+        while ((!host.switches.containsKey(switchKey) || host.status.isEmpty()) && System.currentTimeMillis() < deadline) Thread.sleep(20);
+        assert host.switches.containsKey(switchKey) && !host.status.isEmpty() : "the first read never published " + switchKey + "; status: " + host.status;
     }
 
     static void waitScripts(FakeShell shell, int count) throws InterruptedException {
