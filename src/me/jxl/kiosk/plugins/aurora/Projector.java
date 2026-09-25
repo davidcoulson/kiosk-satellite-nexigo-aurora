@@ -83,8 +83,15 @@ final class Projector {
 
     /** Re-asserts the deliberate-dark flag alone; see AuroraPlugin.poll. */
     static final String REFLAG_SCREEN_OFF_SCRIPT = "setprop cur.prj.screenOff true";
-    /** Brings the intent flag back in line with a light the projector lit or darkened itself. */
-    static String reflagLightScript(boolean on) { return "setprop cur.appo.light.enabled " + (on ? "true" : "false"); }
+    /**
+     * Brings the intent flags back in line with a light the projector lit or darkened itself. A
+     * light that came on is no longer a deliberate dark, so the screen-off flag is cleared with it;
+     * a light that went out on its own is only recorded, never promoted to a deliberate dark.
+     */
+    static String reflagLightScript(boolean on) {
+        return on ? "setprop cur.appo.light.enabled true; setprop cur.prj.screenOff false"
+            : "setprop cur.appo.light.enabled false";
+    }
 
     /** Proves the channel can run the tool and read properties; the first thing a session does. */
     static final String PROBE_SCRIPT = "test -x " + TOOL + " && getprop ro.product.model";

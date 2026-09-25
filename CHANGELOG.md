@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Plugin 0.1.2: a laser the counter shows lit also clears `cur.prj.screenOff`, so the Screen off
+  sensor no longer stays on after the projector lit the picture itself.
+
 - Reverse-engineering notes for the NexiGo Aurora Pro: the Appotronics projector-manager HAL and its
   serial "AT" light-engine protocol, the vendor apps and services, power states, the screen-off
   recipe that keeps the OS awake, inputs, picture modes, the front LED bar, properties and settings.
