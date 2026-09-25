@@ -144,6 +144,19 @@ public final class AuroraPluginTestAccess {
         assert Boolean.TRUE.equals(host.binary.get("screen_off")) : "sensor reflects the re-asserted flag";
         shell.pollAnswer = POLL_ANSWER;
 
+        // The toggle goes by the light as last read: dark after that refresh, so it lights, and
+        // the poll that follows reads it lit, so the next press darkens.
+        before = shell.scripts.size();
+        plugin.execute("pictureToggle", Collections.<String, Object>emptyMap());
+        waitScripts(shell, before + 3);
+        assert shell.scripts.subList(before, before + 3).contains(Projector.pictureScript(true)) : "toggle from dark lights: " + shell.scripts.subList(before, shell.scripts.size());
+        Thread.sleep(100);
+        before = shell.scripts.size();
+        plugin.execute("pictureToggle", Collections.<String, Object>emptyMap());
+        waitScripts(shell, before + 3);
+        assert shell.scripts.subList(before, before + 3).contains(Projector.pictureScript(false)) : "toggle from lit darkens: " + shell.scripts.subList(before, shell.scripts.size());
+        Thread.sleep(100);
+
         before = shell.scripts.size();
         plugin.onEvent("select.input", Collections.<String, Object>singletonMap("option", "HDMI 3"));
         waitScripts(shell, before + 2);

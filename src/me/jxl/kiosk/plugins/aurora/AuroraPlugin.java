@@ -125,6 +125,9 @@ public final class AuroraPlugin implements KioskPlugin {
             case "settings": script = Projector.openSettingsScript(); break;
             case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; ledsForPicture(false); forgetCounter(); break;
             case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; ledsForPicture(true); forgetCounter(); break;
+            // One button for a remote key: dark when the picture shows, on otherwise (an unknown
+            // light is treated as off, since that is the state a key press is meant to end).
+            case "pictureToggle": execute(Boolean.TRUE.equals(lastLight) ? "pictureOff" : "pictureOn", arguments); return;
             case "ledsOff": leds("Off"); return;
             case "ledsOn": leds("Standby"); return;
             case "refresh": script = null; break;
@@ -155,8 +158,12 @@ public final class AuroraPlugin implements KioskPlugin {
      *  time to agree or disagree. */
     private void forgetCounter() { lastWdt = null; wdtMovedAt = 0; wdtSeenAt = 0; }
 
+    /** The light as last published, for the toggle. */
+    private volatile Boolean lastLight;
+
     /** The same, for a light change the projector reports rather than one asked for here. */
     private void followObservedLight(Boolean light) {
+        lastLight = light;
         if (light == null || light.equals(observedLight)) return;
         observedLight = light;
         String want = light ? "Off" : "Standby";

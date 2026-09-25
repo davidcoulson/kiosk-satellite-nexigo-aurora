@@ -72,9 +72,10 @@ appears in Home Assistant as an ESPHome device. This plugin adds the projector t
 
 | **Front LEDs** | select | Off, Standby, Power on, Loop, Bluetooth, Update: the bar's patterns (`setAppoLeds 2 <status>`, verified). By default the bar follows the picture: standby lights while it is dark, nothing while it shows. |
 
-and six actions, which Kiosk Satellite can put in its drawer, on a gesture or on the Home
+and seven actions, which Kiosk Satellite can put in its drawer, on a gesture or on the Home
 Assistant device as buttons: **Open projector settings** (the projector's own app: keystone, focus,
-brightness mode, projection mode...), **Picture off** / **Picture on**, **Front LEDs off** /
+brightness mode, projection mode...), **Picture off** / **Picture on** / **Picture on/off** (one
+button for a remote key), **Front LEDs off** /
 **Front LEDs: standby lights** and **Refresh readings**.
 
 Every command is a fixed script run through `/system/bin/sh -c`; a Home Assistant option can only

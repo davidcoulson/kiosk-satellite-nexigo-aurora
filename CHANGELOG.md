@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Plugin 0.1.3: a `pictureToggle` command, one button that darkens a lit picture and lights a dark
+  one, made for a remote key mapping.
+
 - Plugin 0.1.2: a laser the counter shows lit also clears `cur.prj.screenOff`, so the Screen off
   sensor no longer stays on after the projector lit the picture itself.
 
