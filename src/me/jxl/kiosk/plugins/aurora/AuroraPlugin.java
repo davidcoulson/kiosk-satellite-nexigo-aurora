@@ -49,6 +49,17 @@ public final class AuroraPlugin implements KioskPlugin {
      *  the projector's own menu was used and wins. */
     private Integer sourceAtCommand;
 
+    /** Settings.Global reads through the framework; tests supply their own. */
+    interface Globals {
+        String get(String key);
+    }
+
+    private Globals globals = new Globals() {
+        @Override public String get(String key) { return Framework.getGlobal(key); }
+    };
+
+    void useGlobals(Globals g) { globals = g; }
+
     /** How the Shizuku runner is made, so tests can hand in their own. */
     interface ShizukuFactory {
         Shell.Runner create(PluginHost host);
@@ -128,7 +139,12 @@ public final class AuroraPlugin implements KioskPlugin {
         } else if (event.equals("select.picture_mode")) {
             Integer mode = Projector.idFor(Projector.PICTURE_MODES, Projector.PICTURE_MODE_IDS, payload.get("option"));
             if (mode == null) throw new IllegalArgumentException("Unknown picture mode");
-            script = Projector.pictureModeScript(mode);
+            final int chosen = mode;
+            submit(new Task() { @Override public void run() {
+                if (!Framework.putGlobal("picture_mode", chosen)) command(Projector.pictureModeScript(chosen), "Picture mode");
+                poll();
+            } });
+            return;
         } else if (event.equals("shizuku.state")) {
             submit(new Task() { @Override public void run() { detect(); } });
             return;
@@ -182,7 +198,18 @@ public final class AuroraPlugin implements KioskPlugin {
         if (runner == null || !alive.get()) return;
         Shell.Result r = runner.run(Projector.POLL_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         if (!r.ok()) { status("Could not read the projector via " + channelName + ": " + r.why(), true); return; }
-        publish(Projector.parse(r.stdout));
+        Projector.State s = Projector.parse(r.stdout);
+        // The settings command answers only the shell user; from the kiosk process the framework
+        // answers instead, and it wins whenever it has a value.
+        fill(s, "picture_mode", "mode");
+        fill(s, "boot_source_id", "boot");
+        fill(s, "no_signal_auto_power_off", "nosignal");
+        publish(s);
+    }
+
+    private void fill(Projector.State s, String key, String field) {
+        String v = globals.get(key);
+        if (v != null && !v.trim().isEmpty()) Projector.apply(s, field, v.trim());
     }
 
     private void publish(Projector.State s) {

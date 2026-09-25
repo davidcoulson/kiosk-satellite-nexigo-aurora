@@ -125,8 +125,8 @@ final class Projector {
         String input() { return label(INPUTS, INPUT_IDS, sourceId != null ? sourceId : bootSourceId); }
         /** Both guards in place: CEC standby ignored and the no-signal shutdown off. */
         Boolean staysOn() {
-            if (ignoreCecStandby == null && noSignalOff == null) return null;
-            return Boolean.TRUE.equals(ignoreCecStandby) && noSignalOff != null && noSignalOff == NO_SIGNAL_OFF;
+            if (ignoreCecStandby == null || noSignalOff == null) return null;
+            return ignoreCecStandby && noSignalOff == NO_SIGNAL_OFF;
         }
         String pictureModeLabel() { return label(PICTURE_MODES, PICTURE_MODE_IDS, pictureMode); }
     }
@@ -140,6 +140,17 @@ final class Projector {
             String key = line.substring(0, eq).trim();
             String value = line.substring(eq + 1).trim();
             if (value.isEmpty()) continue;
+            apply(s, key, value);
+        }
+        // A fresh boot has set neither flag yet, and a projector that just booted has its light
+        // on: that is the one case the properties cannot describe, so it is read as on.
+        if (s.light == null && s.screenOff == null) { s.light = Boolean.TRUE; s.screenOff = Boolean.FALSE; }
+        return s;
+    }
+
+    /** One key=value line of the poll output, or a framework reading, into the state. */
+    static void apply(State s, String key, String value) {
+        {
             switch (key) {
                 case "light": s.light = bool(value); break;
                 case "screenoff": s.screenOff = bool(value); break;
@@ -154,10 +165,6 @@ final class Projector {
                 default: break;
             }
         }
-        // A fresh boot has set neither flag yet, and a projector that just booted has its light
-        // on: that is the one case the properties cannot describe, so it is read as on.
-        if (s.light == null && s.screenOff == null) { s.light = Boolean.TRUE; s.screenOff = Boolean.FALSE; }
-        return s;
     }
 
     /** {@code AT+Temperature#NtcRedLaser1:28,NtcGreenLaser1:25,...} */

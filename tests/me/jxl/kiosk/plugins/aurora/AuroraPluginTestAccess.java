@@ -63,6 +63,7 @@ public final class AuroraPluginTestAccess {
         parsing();
         publication();
         commands();
+        framework();
         fallback();
     }
 
@@ -118,6 +119,7 @@ public final class AuroraPluginTestAccess {
         plugin.start(host, settings("Direct", 30));
         waitFor(host, "picture");
         int before = shell.scripts.size();
+        // Off the projector there is no framework, so the plugin falls through to the channel.
 
         plugin.onEvent("switch.picture", Collections.<String, Object>singletonMap("on", false));
         waitScripts(shell, before + 2);
@@ -160,6 +162,24 @@ public final class AuroraPluginTestAccess {
         int after = shell.scripts.size();
         Thread.sleep(150);
         assert shell.scripts.size() == after : "nothing runs after stop";
+    }
+
+    static void framework() throws Exception {
+        FakeShell shell = new FakeShell();
+        shell.pollAnswer = "light=true\nscreenoff=false\nsource=\nmode=\nminutes=60\n";
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null);
+        final Map<String, String> globals = new HashMap<>();
+        globals.put("picture_mode", "9");
+        globals.put("boot_source_id", "6");
+        globals.put("no_signal_auto_power_off", "0");
+        plugin.useGlobals(new AuroraPlugin.Globals() { @Override public String get(String key) { return globals.get(key); } });
+        plugin.start(host, settings("Direct", 30));
+        waitFor(host, "picture");
+        assert "Standard".equals(host.selects.get("picture_mode")) : "picture mode from the framework: " + host.selects.get("picture_mode");
+        assert "HDMI 2".equals(host.selects.get("input")) : "boot source from the framework: " + host.selects.get("input");
+        assert host.binary.get("stays_on") == null : "cec unknown keeps stays-on unknown";
+        plugin.stop();
     }
 
     static void fallback() throws Exception {
