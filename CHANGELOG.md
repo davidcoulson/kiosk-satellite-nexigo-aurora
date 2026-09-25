@@ -7,4 +7,6 @@
   recipe that keeps the OS awake, inputs, picture modes, the front LED bar, properties and settings.
 - Home Assistant scripts (Android Debug Bridge integration) for picture off/on, inputs, picture
   mode and apps.
-- Kiosk Satellite plugin: planned (see README).
+- Kiosk Satellite plugin 0.1.0: Picture switch, Input and Picture mode selects, Screen off
+  sensor, laser hours, temperatures (with Shizuku), and actions for the projector's settings app,
+  picture and front LEDs. Direct execution first, Shizuku as the fallback.

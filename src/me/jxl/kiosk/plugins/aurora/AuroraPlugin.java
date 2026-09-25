@@ -1,0 +1,241 @@
+// SPDX-License-Identifier: Apache-2.0
+package me.jxl.kiosk.plugins.aurora;
+
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import me.jxl.kiosk.plugins.KioskPlugin;
+import me.jxl.kiosk.plugins.PluginHost;
+
+/**
+ * The NexiGo Aurora Pro as Home Assistant entities, from a Kiosk Satellite running on the
+ * projector's own Android.
+ *
+ * <p>Picture (switch), Input and Picture mode (selects), Screen off (binary sensor), laser hours
+ * and the light engine's temperatures (sensors), plus buttons for the projector's settings app
+ * and the front LED bar. State is read back from the projector on a timer and after every
+ * command, and only what was read is published: there is no optimistic state.
+ *
+ * <p>All host callbacks return at once; the work runs on one plugin-owned thread, so commands
+ * and polls never overlap and Kiosk Satellite's three-second callback deadline is never at risk.
+ */
+public final class AuroraPlugin implements KioskPlugin {
+    private static final String CHANNEL_AUTO = "Auto";
+    private static final String CHANNEL_DIRECT = "Direct";
+    private static final String CHANNEL_SHIZUKU = "Shizuku";
+
+    private final AtomicBoolean alive = new AtomicBoolean();
+    private PluginHost host;
+    private ScheduledExecutorService worker;
+    private ScheduledFuture<?> polling;
+    private Map<String, Object> settings = new HashMap<>();
+    private Shell.Runner runner;
+    private String channelName = "no channel";
+    private final Shell.Runner directRunner;
+    private final ShizukuFactory shizukuFactory;
+    private Projector.State last = new Projector.State();
+    private boolean switchPublished;
+
+    /** How the Shizuku runner is made, so tests can hand in their own. */
+    interface ShizukuFactory {
+        Shell.Runner create(PluginHost host);
+    }
+
+    /** The constructor Kiosk Satellite uses. */
+    public AuroraPlugin() {
+        this(Shell.DIRECT, new ShizukuFactory() {
+            @Override public Shell.Runner create(PluginHost h) { return Shell.shizuku(h); }
+        });
+    }
+
+    AuroraPlugin(Shell.Runner directRunner, ShizukuFactory shizukuFactory) {
+        this.directRunner = directRunner;
+        this.shizukuFactory = shizukuFactory;
+    }
+
+    @Override public void start(PluginHost host, Map<String, Object> settings) {
+        this.host = host;
+        this.settings = new HashMap<>(settings);
+        alive.set(true);
+        worker = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+            @Override public Thread newThread(Runnable r) {
+                Thread t = new Thread(r, "nexigo-aurora");
+                t.setDaemon(true);
+                return t;
+            }
+        });
+        // Selects and sensors may start unknown; a switch may not, so Picture waits for a read.
+        host.publishSelect("input", "Input", Projector.INPUTS, null);
+        host.publishSelect("picture_mode", "Picture mode", Projector.PICTURE_MODES, null);
+        host.publishBinarySensor("screen_off", "Screen off", "", null);
+        host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1), null);
+        submit(new Task() { @Override public void run() { detect(); } });
+        schedule();
+    }
+
+    @Override public void configure(Map<String, Object> settings) {
+        this.settings = new HashMap<>(settings);
+        submit(new Task() { @Override public void run() { detect(); } });
+        schedule();
+    }
+
+    @Override public void execute(String command, Map<String, Object> arguments) {
+        final String script;
+        switch (command) {
+            case "settings": script = Projector.openSettingsScript(); break;
+            case "pictureOff": script = Projector.pictureScript(false); break;
+            case "pictureOn": script = Projector.pictureScript(true); break;
+            case "ledsOff": script = Projector.ledsScript(false); break;
+            case "ledsOn": script = Projector.ledsScript(true); break;
+            case "refresh": script = null; break;
+            default: throw new IllegalArgumentException("Unknown command " + command);
+        }
+        submit(new Task() { @Override public void run() { if (script != null) command(script, command); poll(); } });
+    }
+
+    @Override public void onEvent(String event, Map<String, Object> payload) {
+        final String script;
+        if (event.equals("switch.picture")) {
+            Object on = payload.get("on");
+            if (!(on instanceof Boolean)) throw new IllegalArgumentException("Picture wants a boolean");
+            script = Projector.pictureScript((Boolean) on);
+        } else if (event.equals("select.input")) {
+            Integer hw = Projector.idFor(Projector.INPUTS, Projector.INPUT_IDS, payload.get("option"));
+            if (hw == null) throw new IllegalArgumentException("Unknown input");
+            script = Projector.inputScript(hw);
+        } else if (event.equals("select.picture_mode")) {
+            Integer mode = Projector.idFor(Projector.PICTURE_MODES, Projector.PICTURE_MODE_IDS, payload.get("option"));
+            if (mode == null) throw new IllegalArgumentException("Unknown picture mode");
+            script = Projector.pictureModeScript(mode);
+        } else if (event.equals("shizuku.state")) {
+            submit(new Task() { @Override public void run() { detect(); } });
+            return;
+        } else {
+            return;
+        }
+        final String what = event;
+        submit(new Task() { @Override public void run() { command(script, what); poll(); } });
+    }
+
+    @Override public void stop() throws Exception {
+        alive.set(false);
+        if (polling != null) polling.cancel(false);
+        if (worker != null) {
+            worker.shutdownNow();
+            worker.awaitTermination(1000, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    // ---- the work, all on the worker thread ----
+
+    /** Picks the channel from the setting and what the projector accepts, then reads once. */
+    private void detect() {
+        String want = String.valueOf(settings.get("channel"));
+        runner = null;
+        if (!CHANNEL_SHIZUKU.equals(want)) {
+            Shell.Result probe = directRunner.run(Projector.PROBE_SCRIPT, 4000);
+            if (probe.ok()) { runner = directRunner; channelName = "direct"; }
+            else if (CHANNEL_DIRECT.equals(want)) { status("The kiosk process cannot reach the projector's tools directly (" + probe.why() + "). Try Shizuku.", true); return; }
+        }
+        if (runner == null) {
+            if (Shell.shizukuGranted(host)) { runner = shizukuFactory.create(host); channelName = "Shizuku"; }
+            else {
+                status(CHANNEL_SHIZUKU.equals(want)
+                    ? "Shizuku is not running or not authorized for Kiosk Satellite."
+                    : "No way to reach the projector: direct access was refused and Shizuku is not authorized.", true);
+                return;
+            }
+        }
+        poll();
+    }
+
+    private void command(String script, String what) {
+        if (runner == null) { status("No channel to the projector; check the plugin's settings.", true); return; }
+        Shell.Result r = runner.run(script, Shell.DEFAULT_TIMEOUT_MS);
+        if (!r.ok()) status(what + " failed via " + channelName + ": " + r.why(), true);
+    }
+
+    private void poll() {
+        if (runner == null || !alive.get()) return;
+        Shell.Result r = runner.run(Projector.POLL_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
+        if (!r.ok()) { status("Could not read the projector via " + channelName + ": " + r.why(), true); return; }
+        publish(Projector.parse(r.stdout));
+    }
+
+    private void publish(Projector.State s) {
+        if (!alive.get()) return;
+        last = s;
+        if (s.light != null) {
+            host.publishSwitch("picture", "Picture", s.light);
+            switchPublished = true;
+        }
+        host.publishSelect("input", "Input", Projector.INPUTS, s.input());
+        host.publishSelect("picture_mode", "Picture mode", Projector.PICTURE_MODES, s.pictureModeLabel());
+        host.publishBinarySensor("screen_off", "Screen off", "", s.screenOff);
+        host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1),
+            s.laserMinutes == null ? null : s.laserMinutes / 60.0);
+        for (String[] t : Projector.TEMPERATURES) {
+            Double value = s.temperatures.get(t[0]);
+            // Only publish a temperature the projector has ever reported, so a channel that cannot
+            // read the log does not fill Home Assistant with eight unknown sensors.
+            if (value != null || s.temperatures.containsKey(t[0])) {
+                host.publishSensor("temp_" + t[1], t[2] + " temperature", sensorMeta("°C", "temperature", "measurement", 0), value);
+            }
+        }
+        StringBuilder text = new StringBuilder();
+        text.append(s.light == null ? "Picture unknown" : (s.light ? "Picture on" : (Boolean.TRUE.equals(s.screenOff) ? "Screen off" : "Picture off")));
+        if (s.input() != null) text.append(" · ").append(s.input());
+        if (s.pictureModeLabel() != null) text.append(" · ").append(s.pictureModeLabel());
+        if (s.laserMinutes != null) text.append(String.format(Locale.ROOT, " · %.1f laser hours", s.laserMinutes / 60.0));
+        Double dmd = s.temperatures.get("NtcDmd1");
+        if (dmd != null) text.append(String.format(Locale.ROOT, " · DMD %.0f °C", dmd));
+        text.append(" · via ").append(channelName);
+        if (!switchPublished) text.append(". The Picture switch appears once the light state has been read.");
+        status(text.toString(), false);
+    }
+
+    private static Map<String, Object> sensorMeta(String unit, String deviceClass, String stateClass, int decimals) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("unit", unit);
+        m.put("deviceClass", deviceClass);
+        m.put("stateClass", stateClass);
+        m.put("accuracyDecimals", decimals);
+        return m;
+    }
+
+    private void schedule() {
+        if (polling != null) polling.cancel(false);
+        Object v = settings.get("pollSeconds");
+        int seconds = v instanceof Number ? Math.max(10, Math.min(300, ((Number) v).intValue())) : 30;
+        polling = worker.scheduleWithFixedDelay(new Runnable() {
+            @Override public void run() { safe(new Task() { @Override public void run() { poll(); } }); }
+        }, seconds, seconds, TimeUnit.SECONDS);
+    }
+
+    private void status(String text, boolean error) {
+        if (alive.get()) host.status(text, error);
+    }
+
+    private interface Task { void run() throws Exception; }
+
+    private void safe(Task task) {
+        if (!alive.get()) return;
+        try { task.run(); }
+        catch (Throwable t) { status(t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage(), true); }
+    }
+
+    private void submit(final Task task) {
+        if (!alive.get()) return;
+        worker.execute(new Runnable() { @Override public void run() { safe(task); } });
+    }
+
+    /** For tests: the last state the projector reported. */
+    Projector.State lastState() { return last; }
+}

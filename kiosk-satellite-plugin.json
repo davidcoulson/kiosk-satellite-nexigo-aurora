@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "apiVersion": 1,
+  "id": "nexigo-aurora",
+  "name": "NexiGo Aurora Pro",
+  "version": "0.1.0",
+  "minAndroidSdk": 24,
+  "entryClass": "me.jxl.kiosk.plugins.aurora.AuroraPlugin",
+  "description": "Runs on the NexiGo Aurora Pro projector's own Android and puts the projector on this kiosk's Home Assistant device: a Picture switch that blanks the laser the way the projector's power menu does (fans stop, Android stays awake, back in a second), Input and Picture mode selects, laser hours and light-engine temperatures, and buttons that open the projector's settings app (keystone, focus) and drive the front LED bar. Uses the vendor's projector-test tool and system properties; no root. Shizuku is optional and only adds the temperature readings.",
+  "author": "David Coulson",
+  "license": "Apache-2.0",
+  "capabilities": [
+    "entities",
+    "shizuku"
+  ],
+  "settings": [
+    {
+      "key": "pollSeconds",
+      "type": "number",
+      "title": "Read the projector every",
+      "description": "How often the plugin reads the light, input, picture mode, laser hours and temperatures back from the projector.",
+      "min": 10,
+      "max": 300,
+      "step": 5,
+      "default": 30,
+      "unit": "s",
+      "group": "Projector"
+    },
+    {
+      "key": "channel",
+      "type": "select",
+      "title": "Run commands through",
+      "description": "Auto tries the kiosk process itself first (works on the stock firmware, whose SELinux is permissive) and falls back to Shizuku when it is running and authorized. Temperatures need Shizuku either way, since reading the log needs the shell user.",
+      "options": ["Auto", "Direct", "Shizuku"],
+      "default": "Auto",
+      "group": "Projector"
+    }
+  ],
+  "commands": [
+    {
+      "id": "settings",
+      "title": "Open projector settings"
+    },
+    {
+      "id": "pictureOff",
+      "title": "Picture off"
+    },
+    {
+      "id": "pictureOn",
+      "title": "Picture on"
+    },
+    {
+      "id": "ledsOff",
+      "title": "Front LEDs off"
+    },
+    {
+      "id": "ledsOn",
+      "title": "Front LEDs on"
+    },
+    {
+      "id": "refresh",
+      "title": "Refresh readings"
+    }
+  ]
+}

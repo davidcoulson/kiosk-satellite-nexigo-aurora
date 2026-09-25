@@ -57,29 +57,59 @@ about a second after the on command instead of after a 25 s boot.
 
 ## The plugin
 
-Kiosk Satellite runs on the projector's Android (it is an ordinary Android TV 9 device, `minSdk 24`
-is fine) and appears in Home Assistant as an ESPHome device. The plugin in this repository will
-add, on that device:
+Kiosk Satellite runs on the projector's Android (an ordinary Android TV 9 device; `minSdk 24`) and
+appears in Home Assistant as an ESPHome device. This plugin adds the projector to that device:
 
-- **Picture** switch: the screen-off recipe above, with state read back from `isLightSourceOn`.
-- **Input** select: HDMI 1-4.
-- **Picture mode** select.
-- **Projector settings** button: opens `com.xming.xmprojectorsettings` (keystone, focus, brightness
-  mode, projection mode...) on the projector, so those can be reached from the couch without the
-  remote.
-- **Front LEDs** switch.
-- Sensors: laser hours, the eight temperatures the light engine reports (red/green/blue laser,
-  colour wheel, DMD, environment, XPR, power supply), fan speeds, current input.
-- No fan control. The firmware's `appothermal` daemon runs the fans from those same temperatures;
-  the plugin reads them and leaves the cooling of a triple-laser engine to the people who built it.
+| Entity | Kind | What it does |
+| --- | --- | --- |
+| **Picture** | switch | The screen-off recipe above. Off: laser and fans stop, Android stays awake. On: back in a second. State is read back from `cur.appo.light.enabled`, which every path on the projector (power menu, remote key, sleep timer) keeps in step. |
+| **Input** | select | HDMI 1-4, through the TV input framework. Reads back from `cur.prj.currentSourceId`. |
+| **Picture mode** | select | Cinema Home, Cinema Pro, Standard, Brightest, Game, Custom (`picture_mode`). |
+| **Screen off** | binary sensor | `cur.prj.screenOff`: the dark is deliberate. |
+| **Laser hours** | sensor | From the HAL's own counter (`laser_used_time_wdt`). |
+| **Red/Green/Blue laser, Colour wheel, DMD, Ambient temperature** | sensors | The light engine's NTCs, from its 30-second report in the log. Only with Shizuku (reading the log needs the shell user); a temperature is published once it has been seen. |
 
-It uses the vendor's `projector-test` tool and system properties (through Shizuku or, if the
-permissive SELinux allows it, directly), never root.
+and six actions, which Kiosk Satellite can put in its drawer, on a gesture or on the Home
+Assistant device as buttons: **Open projector settings** (the projector's own app: keystone, focus,
+brightness mode, projection mode...), **Picture off** / **Picture on**, **Front LEDs off** /
+**Front LEDs on** (`setAppoLeds`; decoded, not yet verified on the bar) and **Refresh readings**.
+
+Every command is a fixed script run through `/system/bin/sh -c`; a Home Assistant option can only
+become one of the numbers in `Projector.java`. After each command the plugin reads the projector
+back and publishes what it found; there is no optimistic state. Nothing touches the fans: the
+firmware's `appothermal` runs those from the same temperatures.
+
+### Install
+
+1. Kiosk Satellite on the projector, with its ESPHome device added to Home Assistant.
+2. **Plugin Manager > Add plugin**, this repository's URL, **Trust and install**, then enable it.
+   (Or **Developer Tools > Install from ZIP** with a local build from `python3 tools/build.py`.)
+3. Once, from a computer, so Picture mode can be written:
+   `adb shell pm grant me.jxl.kiosk_satellite android.permission.WRITE_SECURE_SETTINGS`.
+   It survives reboots. Everything else works without it.
+4. Optional: [Shizuku](https://shizuku.rikka.app/) started over ADB and authorized for Kiosk
+   Satellite adds the temperature sensors. A Shizuku started over ADB does not survive a power
+   cycle, and this projector cold-boots from standby, so the plugin never depends on it.
+
+**Run commands through** (plugin settings): *Auto* tries the kiosk process first (the stock
+firmware's SELinux is permissive, so the vendor tool and the properties are reachable from an
+app) and falls back to Shizuku; *Direct* and *Shizuku* force one. The status line says which
+channel answered.
+
+### Build and test
+
+```sh
+python3 tools/test.py     # parsing, entity publication, the exact command scripts, channel fallback
+python3 tools/build.py    # dist/nexigo-aurora-<version>.zip (needs JDK 17+ and an Android SDK, ANDROID_HOME)
+```
+
+Releases are built by GitHub Actions from a `v<version>` tag, as Kiosk Satellite requires.
 
 ## Status
 
 Verified on one Aurora Pro, firmware above. The screen-off recipe, inputs, picture modes and app
-launching are in daily use from Home Assistant. The LED bar commands are decoded but not yet
+launching are in daily use from Home Assistant over ADB. The plugin builds and passes its tests;
+first runs on the projector are in progress. The LED bar commands are decoded but not yet
 exercised. Everything else in the HAL list is documented from the binaries, not tested.
 
 ## Licence

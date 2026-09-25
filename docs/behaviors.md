@@ -69,6 +69,11 @@ dismissed. Toggle it through the projector settings (`setIrBodyDetectOnOff` in t
 
 ## No-signal shutdown
 
+Seen in practice: with the picture off and the Apple TV left to fall asleep (its own idle timer),
+the projector went to standby about fifteen minutes after the source dropped, and took the Apple
+TV's CEC state with it. Screen off does not suspend this timer; keep the source awake, or accept
+that a blanked projector will eventually stand by.
+
 `Settings.Global no_signal_auto_power_off` (default index 4) is the "turn off after N minutes
 without signal" setting; `DeviceManager.isSignalLoss()` combines MediaTek's `MtkTvBroadcast.isSignalLoss()`
 with "is any input selected". With a source that keeps its HDMI output alive (Apple TV on, screen
