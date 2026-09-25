@@ -83,6 +83,8 @@ final class Projector {
 
     /** Re-asserts the deliberate-dark flag alone; see AuroraPlugin.poll. */
     static final String REFLAG_SCREEN_OFF_SCRIPT = "setprop cur.prj.screenOff true";
+    /** Brings the intent flag back in line with a light the projector lit or darkened itself. */
+    static String reflagLightScript(boolean on) { return "setprop cur.appo.light.enabled " + (on ? "true" : "false"); }
 
     /** Proves the channel can run the tool and read properties; the first thing a session does. */
     static final String PROBE_SCRIPT = "test -x " + TOOL + " && getprop ro.product.model";
@@ -97,6 +99,7 @@ final class Projector {
         + " echo \"source=$(getprop cur.prj.currentSourceId)\";"
         + " echo \"mode=$(settings get global picture_mode 2>/dev/null)\";"
         + " echo \"minutes=$(" + TOOL + " getPlatformProperty used_time 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
+        + " echo \"wdt=$(" + TOOL + " getPlatformProperty laser_used_time_wdt 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
         + " echo \"temps=$(logcat -d -t 600 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\";"
         + " echo \"leds=$(cat /sys/class/appo_led_pwm_pm/appo_led_pwm_pm/led_pwm 2>/dev/null)\";"
         + " echo \"boot=$(settings get global boot_source_id 2>/dev/null)\";"
@@ -128,6 +131,9 @@ final class Projector {
         Integer sourceId;
         Integer pictureMode;
         Long laserMinutes;
+        /** The HAL's minute counter since it last saved the hours: it moves only while the laser
+         *  is lit, which makes it the one honest readback of the light. */
+        Integer laserWdt;
         Integer ledPwm;
         Integer bootSourceId;
         Boolean ignoreCecStandby;
@@ -173,6 +179,7 @@ final class Projector {
                 case "source": { Integer id = integer(value); s.sourceId = id == null || id < 0 ? null : id; break; }
                 case "mode": s.pictureMode = integer(value); break;
                 case "minutes": { Integer m = integer(value); if (m != null) s.laserMinutes = m.longValue(); break; }
+                case "wdt": s.laserWdt = integer(value); break;
                 case "leds": s.ledPwm = integer(value); break;
                 case "boot": s.bootSourceId = integer(value); break;
                 case "cec": s.ignoreCecStandby = bool(value); break;

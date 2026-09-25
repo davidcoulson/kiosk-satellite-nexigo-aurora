@@ -3,7 +3,7 @@
   "apiVersion": 1,
   "id": "nexigo-aurora",
   "name": "NexiGo Aurora Pro",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAndroidSdk": 24,
   "entryClass": "me.jxl.kiosk.plugins.aurora.AuroraPlugin",
   "description": "Runs on the NexiGo Aurora Pro projector's own Android and puts the projector on this kiosk's Home Assistant device: a Picture switch that blanks the laser the way the projector's power menu does (fans stop, Android stays awake, back in a second), Input and Picture mode selects, laser hours and light-engine temperatures, and buttons that open the projector's settings app (keystone, focus) and drive the front LED bar. Uses the vendor's projector-test tool and system properties; no root. Shizuku is optional and only adds the temperature readings.",
@@ -38,7 +38,7 @@
       "key": "ledsFollowPicture",
       "type": "boolean",
       "title": "Front LEDs follow the picture",
-      "description": "When the picture goes off from here the front bar shows the projector's standby lights, and it goes dark again when the picture comes back. The Front LEDs select still sets any pattern by hand.",
+      "description": "The front bar shows the projector's standby lights while the picture is off and goes dark while it shows - whether the picture was changed here, by a remote key or by the projector's own menu. The Front LEDs select still sets any pattern by hand.",
       "default": true,
       "group": "Projector"
     },

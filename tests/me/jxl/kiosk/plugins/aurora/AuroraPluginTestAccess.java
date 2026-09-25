@@ -16,7 +16,7 @@ public final class AuroraPluginTestAccess {
     static final String POLL_ANSWER =
         "light=true\nscreenoff=false\nsource=6\nmode=8\nminutes=1530\n"
         + "temps=AT+Temperature#NtcRedLaser1:28,NtcGreenLaser1:25,NtcBlueLaser1:34,NtcCw1:33,NtcDmd1:37,NtcEnv1:23\nleds=0\n"
-        + "boot=5\ncec=true\nnosignal=0\n";
+        + "boot=5\ncec=true\nnosignal=0\nwdt=40\n";
 
     /** Records every script and answers the poll with a canned projector. */
     static final class FakeShell implements Shell.Runner {
@@ -63,6 +63,8 @@ public final class AuroraPluginTestAccess {
         parsing();
         publication();
         commands();
+        observed();
+        counter();
         framework();
         fallback();
     }
@@ -70,6 +72,7 @@ public final class AuroraPluginTestAccess {
     static void parsing() {
         Projector.State s = Projector.parse(POLL_ANSWER);
         assert Boolean.TRUE.equals(s.light) && Boolean.FALSE.equals(s.screenOff) : "flags";
+        assert s.laserWdt == 40 : "wdt";
         assert "HDMI 2".equals(s.input()) : "input " + s.input();
         assert "Cinema Pro".equals(s.pictureModeLabel()) : "mode";
         assert s.laserMinutes == 1530L : "minutes";
@@ -181,6 +184,56 @@ public final class AuroraPluginTestAccess {
         int after = shell.scripts.size();
         Thread.sleep(150);
         assert shell.scripts.size() == after : "nothing runs after stop";
+    }
+
+    static void observed() throws Exception {
+        FakeShell shell = new FakeShell();
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null);
+        plugin.start(host, settings("Direct", 30));
+        waitFor(host, "picture");
+        Thread.sleep(150);
+        assert shell.scripts.contains(Projector.ledsScript(Projector.LED_OFF)) : "a lit projector at start gets the bar turned off";
+        int before = shell.scripts.size();
+        // The projector goes dark on its own (power menu): the next read moves the bar to standby.
+        shell.pollAnswer = POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=true");
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitScripts(shell, before + 2);
+        Thread.sleep(150);
+        assert shell.scripts.contains(Projector.ledsScript(Projector.LED_STANDBY)) : "bar follows an observed dark: " + shell.scripts.subList(before, shell.scripts.size());
+        before = shell.scripts.size();
+        // A remote key re-lights it: the bar goes off again.
+        shell.pollAnswer = POLL_ANSWER;
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitScripts(shell, before + 2);
+        Thread.sleep(150);
+        assert shell.scripts.subList(before, shell.scripts.size()).contains(Projector.ledsScript(Projector.LED_OFF)) : "bar follows an observed relight";
+        before = shell.scripts.size();
+        // Unchanged state: nothing is sent to the bar.
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitScripts(shell, before + 1);
+        Thread.sleep(150);
+        assert !shell.scripts.subList(before, shell.scripts.size()).toString().contains("setAppoLeds") : "no LED command without a change";
+        plugin.stop();
+    }
+
+    /** The flag says dark but the HAL's minute counter keeps moving: the laser is on. */
+    static void counter() throws Exception {
+        FakeShell shell = new FakeShell();
+        shell.pollAnswer = POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=true").replace("wdt=40", "wdt=40");
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null);
+        plugin.start(host, settings("Direct", 30));
+        waitFor(host, "picture");
+        assert Boolean.FALSE.equals(host.switches.get("picture")) : "flag trusted at first";
+        shell.pollAnswer = shell.pollAnswer.replace("wdt=40", "wdt=41");
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitScripts(shell, shell.scripts.size() + 1);
+        Thread.sleep(200);
+        assert Boolean.TRUE.equals(host.switches.get("picture")) : "a moving counter means on: " + host.switches.get("picture");
+        assert shell.scripts.contains(Projector.reflagLightScript(true)) : "flag brought in line";
+        assert shell.scripts.contains(Projector.ledsScript(Projector.LED_OFF)) : "bar off when the laser is found on";
+        plugin.stop();
     }
 
     static void framework() throws Exception {

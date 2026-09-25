@@ -49,6 +49,16 @@ public final class AuroraPlugin implements KioskPlugin {
     private boolean commandedPictureOff;
     /** The bar cannot be read back; this is what was last asked of it. */
     private String commandedLeds;
+    /** The light state the last read reported, so the bar can follow changes made elsewhere
+     *  (a remote key re-lights a screen-off projector; the power menu darkens it). */
+    private Boolean observedLight;
+    /** The laser minute counter's last value and when it was last seen to move. The flags say
+     *  what was asked; the counter says what the light engine is doing. */
+    private Integer lastWdt;
+    private long wdtMovedAt;
+    private long wdtSeenAt;
+    /** No movement for this long while polling means the laser is off. Two minute ticks. */
+    static final long LASER_QUIET_MS = 150_000L;
     /** What cur.prj.currentSourceId said when that input was commanded; a later change means
      *  the projector's own menu was used and wins. */
     private Integer sourceAtCommand;
@@ -113,8 +123,8 @@ public final class AuroraPlugin implements KioskPlugin {
         final String script;
         switch (command) {
             case "settings": script = Projector.openSettingsScript(); break;
-            case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; ledsForPicture(false); break;
-            case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; ledsForPicture(true); break;
+            case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; ledsForPicture(false); forgetCounter(); break;
+            case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; ledsForPicture(true); forgetCounter(); break;
             case "ledsOff": leds("Off"); return;
             case "ledsOn": leds("Standby"); return;
             case "refresh": script = null; break;
@@ -141,6 +151,18 @@ public final class AuroraPlugin implements KioskPlugin {
         if (Boolean.TRUE.equals(settings.get("ledsFollowPicture"))) leds(pictureOn ? "Off" : "Standby");
     }
 
+    /** After a picture command from here the flag is the truth again until the counter has had
+     *  time to agree or disagree. */
+    private void forgetCounter() { lastWdt = null; wdtMovedAt = 0; wdtSeenAt = 0; }
+
+    /** The same, for a light change the projector reports rather than one asked for here. */
+    private void followObservedLight(Boolean light) {
+        if (light == null || light.equals(observedLight)) return;
+        observedLight = light;
+        String want = light ? "Off" : "Standby";
+        if (!want.equals(commandedLeds)) ledsForPicture(light);
+    }
+
     @Override public void onEvent(String event, Map<String, Object> payload) {
         final String script;
         if (event.equals("switch.picture")) {
@@ -149,6 +171,7 @@ public final class AuroraPlugin implements KioskPlugin {
             script = Projector.pictureScript((Boolean) on);
             commandedPictureOff = !(Boolean) on;
             ledsForPicture((Boolean) on);
+            forgetCounter();
         } else if (event.equals("select.input")) {
             Integer hw = Projector.idFor(Projector.INPUTS, Projector.INPUT_IDS, payload.get("option"));
             if (hw == null) throw new IllegalArgumentException("Unknown input");
@@ -232,6 +255,24 @@ public final class AuroraPlugin implements KioskPlugin {
         fill(s, "picture_mode", "mode");
         fill(s, "boot_source_id", "boot");
         fill(s, "no_signal_auto_power_off", "nosignal");
+        // The flags only record what was asked through the vendor's own code path; the TV app can
+        // light the laser straight through the HAL and leave cur.appo.light.enabled at false. The
+        // HAL's minute counter cannot lie: it moves only while the laser is lit. A counter that
+        // moved recently means on; one that has sat still through two ticks means off; anything
+        // in between defers to the flag.
+        long now = System.currentTimeMillis();
+        if (s.laserWdt != null) {
+            if (lastWdt != null && !s.laserWdt.equals(lastWdt)) wdtMovedAt = now;
+            if (lastWdt == null) wdtSeenAt = now;
+            lastWdt = s.laserWdt;
+            Boolean counterSays = now - wdtMovedAt < LASER_QUIET_MS ? Boolean.TRUE
+                : (wdtSeenAt > 0 && now - wdtSeenAt >= LASER_QUIET_MS ? Boolean.FALSE : null);
+            if (counterSays != null && !counterSays.equals(s.light)) {
+                s.light = counterSays;
+                if (counterSays) { s.screenOff = Boolean.FALSE; commandedPictureOff = false; }
+                runner.run(Projector.reflagLightScript(counterSays), 4000);
+            }
+        }
         // Android waking its display (a Kiosk Satellite restart does it) clears cur.prj.screenOff
         // while the light stays off. The flag is what tells the vendor's services the dark is
         // deliberate, so when this plugin turned the picture off it puts the flag back.
@@ -254,6 +295,7 @@ public final class AuroraPlugin implements KioskPlugin {
             switchPublished = true;
         }
         if (commandedInput != null && s.sourceId != null && !s.sourceId.equals(sourceAtCommand)) commandedInput = null;
+        followObservedLight(s.light);
         host.publishSelect("input", "Input", Projector.INPUTS, commandedInput != null ? commandedInput : s.input());
         host.publishBinarySensor("stays_on", "Stays on when the source sleeps", "", s.staysOn());
         host.publishSelect("picture_mode", "Picture mode", Projector.PICTURE_MODES, s.pictureModeLabel());
