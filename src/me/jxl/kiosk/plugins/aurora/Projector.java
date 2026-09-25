@@ -88,7 +88,7 @@ final class Projector {
         + " echo \"screenoff=$(getprop cur.prj.screenOff)\";"
         + " echo \"source=$(getprop cur.prj.currentSourceId)\";"
         + " echo \"mode=$(settings get global picture_mode 2>/dev/null)\";"
-        + " echo \"minutes=$(" + TOOL + " getPlatformProperty laser_used_time_wdt 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
+        + " echo \"minutes=$(" + TOOL + " getPlatformProperty used_time 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
         + " echo \"temps=$(logcat -d -t 600 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\";"
         + " echo \"leds=$(cat /sys/class/appo_led_pwm_pm/appo_led_pwm_pm/led_pwm 2>/dev/null)\";"
         + " echo \"boot=$(settings get global boot_source_id 2>/dev/null)\";"
@@ -106,6 +106,12 @@ final class Projector {
         {"NtcXpr1", "xpr", "XPR"},
         {"NtcPowerSupply", "power_supply", "Power supply"},
     };
+
+    /*
+     * Laser hours come from the HAL's own store: "used_time" is the lifetime light-source
+     * minutes (the value the projector's menu shows); "laser_used_time_wdt" next to it is only
+     * the minutes since the HAL last folded them in, and resets every few minutes.
+     */
 
     /** A snapshot of what the projector reported; null fields are unknown. */
     static final class State {
