@@ -64,8 +64,9 @@ appears in Home Assistant as an ESPHome device. This plugin adds the projector t
 | --- | --- | --- |
 | **Picture** | switch | The screen-off recipe above. Off: laser and fans stop, Android stays awake. On: back in a second. State is read back from `cur.appo.light.enabled`, which every path on the projector (power menu, remote key, sleep timer) keeps in step. |
 | **Input** | select | HDMI 1-4, through the TV input framework. Reads back from `cur.prj.currentSourceId`. |
-| **Picture mode** | select | Cinema Home, Cinema Pro, Standard, Brightest, Game, Custom (`picture_mode`). |
+| **Picture mode** | select | Cinema Home, Cinema Pro, Standard, Brightest, Game, Custom (`picture_mode`). Read through the framework; written through the framework when Kiosk Satellite holds `WRITE_SECURE_SETTINGS`, else through Shizuku. |
 | **Screen off** | binary sensor | `cur.prj.screenOff`: the dark is deliberate. |
+| **Stays on when the source sleeps** | binary sensor | Both guards in place: CEC standby ignored and the no-signal shutdown off. The plugin sets them at start (the no-signal setting needs the permission above). |
 | **Laser hours** | sensor | From the HAL's own counter (`laser_used_time_wdt`). |
 | **Red/Green/Blue laser, Colour wheel, DMD, Ambient temperature** | sensors | The light engine's NTCs, from its 30-second report in the log. Only with Shizuku (reading the log needs the shell user); a temperature is published once it has been seen. |
 
@@ -84,9 +85,11 @@ firmware's `appothermal` runs those from the same temperatures.
 1. Kiosk Satellite on the projector, with its ESPHome device added to Home Assistant.
 2. **Plugin Manager > Add plugin**, this repository's URL, **Trust and install**, then enable it.
    (Or **Developer Tools > Install from ZIP** with a local build from `python3 tools/build.py`.)
-3. Once, from a computer, so Picture mode can be written:
-   `adb shell pm grant me.jxl.kiosk_satellite android.permission.WRITE_SECURE_SETTINGS`.
-   It survives reboots. Everything else works without it.
+3. Picture mode and the no-signal shutdown are `Settings.Global` writes, which need
+   `WRITE_SECURE_SETTINGS`. Stock Kiosk Satellite does not declare that permission, so `pm grant`
+   refuses it; a build that declares it can be granted once over ADB and keeps it across reboots.
+   Until then those two writes go through Shizuku when it is running, and the projector's own menu
+   otherwise. Everything else works without it.
 4. Optional: [Shizuku](https://shizuku.rikka.app/) started over ADB and authorized for Kiosk
    Satellite adds the temperature sensors. A Shizuku started over ADB does not survive a power
    cycle, and this projector cold-boots from standby, so the plugin never depends on it.
@@ -107,10 +110,13 @@ Releases are built by GitHub Actions from a `v<version>` tag, as Kiosk Satellite
 
 ## Status
 
-Verified on one Aurora Pro, firmware above. The screen-off recipe, inputs, picture modes and app
-launching are in daily use from Home Assistant over ADB. The plugin builds and passes its tests;
-first runs on the projector are in progress. The LED bar commands are decoded but not yet
-exercised. Everything else in the HAL list is documented from the binaries, not tested.
+Verified on one Aurora Pro, firmware above. The plugin runs on the projector's Kiosk Satellite
+and its Picture switch has been driven from Home Assistant: the projector logs the serial
+command, the flags follow, and the switch and Screen-off sensor confirm - through the direct
+channel, no Shizuku. With the stay-on guards the projector stayed on the network through the
+Apple TV sleeping (it used to stand by 19 s after). Inputs and picture modes were verified over
+ADB before the plugin. The LED bar commands are decoded but not yet exercised. Everything else in
+the HAL list is documented from the binaries, not tested.
 
 ## Licence
 

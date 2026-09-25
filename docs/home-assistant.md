@@ -56,10 +56,42 @@ Limits of this route: one ADB session at a time is shared with anything else usi
 command has a ~9 s read timeout, and there is no state feedback (whether the picture is on) without
 parsing logcat.
 
-## Coming: the Kiosk Satellite plugin
+## With the plugin
 
-Kiosk Satellite is installed on the projector and appears in HA as an ESPHome device. The plugin
-runs inside it, calls `projector-test` and `setprop` itself, reads state back from the HAL, and
-publishes proper entities (a switch for the picture, selects for input and picture mode, buttons
-for the settings app and apps, sensors for hours and temperatures). The ADB scripts above remain
-the fallback and the reference for what each entity does.
+Kiosk Satellite on the projector appears in HA as an ESPHome device; the plugin adds its entities
+to it (object ids `plugin_nexigo_aurora____<type>_<key>`, shown under the device's name):
+
+```yaml
+script:
+  projector_picture_off:
+    sequence:
+      - action: switch.turn_off
+        target: { entity_id: switch.<device>_nexigo_aurora_pro_picture }
+  projector_input:
+    fields: { input: { example: "HDMI 2" } }
+    sequence:
+      - action: select.select_option
+        target: { entity_id: select.<device>_nexigo_aurora_pro_input }
+        data: { option: "{{ input }}" }
+
+automation:
+  - alias: Projector picture follows the Apple TV
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: media_player.apple_tv
+        to: "off"
+        for: "00:00:30"
+        id: asleep
+      - trigger: state
+        entity_id: media_player.apple_tv
+        from: "off"
+        id: awake
+    actions:
+      - action: "switch.turn_{{ 'off' if trigger.id == 'asleep' else 'on' }}"
+        target: { entity_id: switch.<device>_nexigo_aurora_pro_picture }
+```
+
+With the plugin's stay-on guards the projector never stands by on its own, so the picture simply
+follows the source. The ADB scripts above remain the reference for what each entity does, and
+ADB is still the way to launch an app or send a key until the plugin grows those.
