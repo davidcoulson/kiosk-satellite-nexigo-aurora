@@ -50,7 +50,8 @@ b)` followed by `ProjectorManager.setLightSourceOnOff(b)`; `isLightSourceEnabled
 
 ## `com.xming.xmprojectorsettings` - the projector settings app
 
-`ProjectorSettingActivity` (launchable: `am start -n com.xming.xmprojectorsettings/.ProjectorSettingActivity`).
+`ProjectorSettingActivity` (launchable: `am start -n com.xming.xmprojectorsettings/.ProjectorSettingActivity`; from an
+app's own process rather than the adb shell, add `--user 0` or nothing starts).
 Its items, from the class names, are the whole projector-side settings surface:
 
 `AutoCeilingItem`, `AutoFocusItem`, `AutoKeystoneItem`, `BlankScreenItem`, `BootAutoFocusItem`,

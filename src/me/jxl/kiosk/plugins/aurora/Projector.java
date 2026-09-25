@@ -54,9 +54,15 @@ final class Projector {
         return TOOL + " setAppoLeds 2 " + status;
     }
 
+    /**
+     * Starts an activity from the kiosk's own process. {@code am} run by an app (not the shell
+     * user) needs the user spelled out, or it starts nothing and says nothing.
+     */
+    private static final String AM_START = "am start --user 0";
+
     /** Selects an HDMI port by opening the TV input framework's pass-through URI. */
     static String inputScript(int hw) {
-        return "am start -a android.intent.action.VIEW -d"
+        return AM_START + " -a android.intent.action.VIEW -d"
             + " content://android.media.tv/passthrough/com.mediatek.tvinput%2F.hdmi.HDMIInputService%2FHW" + hw;
     }
 
@@ -66,7 +72,7 @@ final class Projector {
     }
 
     static String openSettingsScript() {
-        return "am start -n " + SETTINGS_ACTIVITY;
+        return AM_START + " -n " + SETTINGS_ACTIVITY;
     }
 
     /** No-signal shutdown off ("Close" in the projector's menu; 1-5 are 5, 10, 15, 30 and 60 min). */

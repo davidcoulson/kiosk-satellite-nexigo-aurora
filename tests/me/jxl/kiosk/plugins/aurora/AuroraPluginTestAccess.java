@@ -182,7 +182,7 @@ public final class AuroraPluginTestAccess {
 
         plugin.execute("settings", Collections.<String, Object>emptyMap());
         waitScripts(shell, before + 2);
-        assert shell.scripts.get(before).equals("am start -n com.xming.xmprojectorsettings/.ProjectorSettingActivity") : "settings app";
+        assert shell.scripts.get(before).equals("am start --user 0 -n com.xming.xmprojectorsettings/.ProjectorSettingActivity") : "settings app";
 
         before = shell.scripts.size();
         plugin.execute("ledsOff", Collections.<String, Object>emptyMap());

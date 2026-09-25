@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Plugin 0.1.4: `am start --user 0` for the settings app and the input switch, so both work when
+  Kiosk Satellite runs them from its own process (a remote key mapped to `settings` opened
+  nothing before).
+
 - Plugin 0.1.3: a `pictureToggle` command, one button that darkens a lit picture and lights a dark
   one, made for a remote key mapping.
 
