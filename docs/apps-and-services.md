@@ -104,3 +104,17 @@ Bluetooth, language, input method, time, storage.
 Sysfs the HAL knows about: `/sys/class/appo_led_pwm_pm/appo_led_pwm_pm/{led_pwm,led_duty,led_period}`
 (the front LED PWM, root-writable only) and `/sys/class/leds/lap-green/brightness` (absent on this
 unit). `/sys/class/backlight/backlight` exists but is a 0/1 stub (`max_brightness=1`).
+
+## What was switched off on this unit
+
+Reversible with `pm enable <package>`; none of it needs root.
+
+| Package | Why |
+| --- | --- |
+| `com.zeasn.whale.saas` | Telemetry: posts the MAC, model and build fingerprint to `log.saas.zeasn.tv`. |
+| `com.ecloud.eshare.server`, `com.ecloud.eairplay`, `com.ecloud.emedia`, `com.allshare.chromcast.castapp`, `com.appo.miracast` | The EShare/AppoFly, AirPlay, DLNA, Chromecast and Miracast receivers: five always-on services with open LAN ports (1106, 7100, 8000, 8008/8009, 8082, 8121), none of them used when an Apple TV is the source. |
+| `com.appo.fotaupgrade` | The OTA client. Everything in this repository depends on this exact firmware (permissive SELinux, `projector-test`, the property names); updates are now a deliberate act. |
+
+Also `settings put secure screensaver_enabled 0`: Android's clock daydream is one more reason for
+the laser to be on. Afterwards only ADB (5555) and one Android system port listen on all
+interfaces.
