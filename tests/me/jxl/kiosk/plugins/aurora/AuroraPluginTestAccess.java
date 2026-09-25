@@ -78,6 +78,8 @@ public final class AuroraPluginTestAccess {
         Projector.State empty = Projector.parse("light=\nsource=\nmode=\nminutes=\ntemps=\n");
         assert Boolean.TRUE.equals(empty.light) && Boolean.FALSE.equals(empty.screenOff) : "a fresh boot reads as picture on";
         assert empty.input() == null && empty.pictureModeLabel() == null && empty.laserMinutes == null && empty.temperatures.isEmpty() && empty.staysOn() == null : "unknowns";
+        Projector.State dark = Projector.parse("source=-1\nboot=6\n");
+        assert dark.sourceId == null && "HDMI 2".equals(dark.input()) : "-1 while the picture is off is not an input";
         Projector.State booted = Projector.parse("source=\nboot=5\ncec=false\nnosignal=4\n");
         assert "HDMI 1".equals(booted.input()) && Boolean.FALSE.equals(booted.staysOn()) : "boot source and guards";
         assert Boolean.TRUE.equals(s.staysOn()) : "stays on";

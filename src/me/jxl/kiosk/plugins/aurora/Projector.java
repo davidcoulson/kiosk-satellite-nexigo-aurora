@@ -154,7 +154,9 @@ final class Projector {
             switch (key) {
                 case "light": s.light = bool(value); break;
                 case "screenoff": s.screenOff = bool(value); break;
-                case "source": s.sourceId = integer(value); break;
+                // -1 while the picture is off: no input is being shown, which is not "unknown
+                // input", so it is dropped and the boot source or the last command stands.
+                case "source": { Integer id = integer(value); s.sourceId = id == null || id < 0 ? null : id; break; }
                 case "mode": s.pictureMode = integer(value); break;
                 case "minutes": { Integer m = integer(value); if (m != null) s.laserMinutes = m.longValue(); break; }
                 case "leds": s.ledPwm = integer(value); break;
