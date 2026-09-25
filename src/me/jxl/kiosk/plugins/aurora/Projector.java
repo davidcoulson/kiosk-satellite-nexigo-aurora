@@ -99,6 +99,22 @@ final class Projector {
             : "setprop cur.appo.light.enabled false";
     }
 
+    /** The log line alone, for a shell-user channel behind a direct one. */
+    static final String TEMPS_SCRIPT = "echo \"temps=$(logcat -d -t 600 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\"";
+
+    /** Proves a loopback ADB session is the shell user, which is the point of it. */
+    static final String ADB_PROBE_SCRIPT = "id";
+
+    /**
+     * Starts Shizuku from its own APK when it is installed and not running: what its start.sh
+     * does, minus the file it writes to the SD card. Harmless when it is already up (its starter
+     * replaces the old server) or not installed (nothing found, exit 0).
+     */
+    static final String SHIZUKU_START_SCRIPT = "if ! pidof shizuku_server >/dev/null 2>&1; then"
+        + " APK=$(pm path moe.shizuku.privileged.api 2>/dev/null | head -1 | cut -d: -f2);"
+        + " ST=$(ls $(dirname \"$APK\")/lib/*/libshizuku.so 2>/dev/null | head -1);"
+        + " [ -n \"$APK\" ] && [ -n \"$ST\" ] && \"$ST\" --apk=\"$APK\" >/dev/null 2>&1; fi; true";
+
     /** Proves the channel can run the tool and read properties; the first thing a session does. */
     static final String PROBE_SCRIPT = "test -x " + TOOL + " && getprop ro.product.model";
 

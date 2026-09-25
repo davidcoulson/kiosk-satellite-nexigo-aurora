@@ -3,7 +3,7 @@
   "apiVersion": 1,
   "id": "nexigo-aurora",
   "name": "NexiGo Aurora Pro",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "minAndroidSdk": 24,
   "entryClass": "me.jxl.kiosk.plugins.aurora.AuroraPlugin",
   "description": "Runs on the NexiGo Aurora Pro projector's own Android and puts the projector on this kiosk's Home Assistant device: a Picture switch that blanks the laser the way the projector's power menu does (fans stop, Android stays awake, back in a second), Input and Picture mode selects, laser hours and light-engine temperatures, and buttons that open the projector's settings app (keystone, focus) and drive the front LED bar. Uses the vendor's projector-test tool and system properties; no root. Shizuku is optional and only adds the temperature readings.",
@@ -46,9 +46,28 @@
       "key": "channel",
       "type": "select",
       "title": "Run commands through",
-      "description": "Auto tries the kiosk process itself first (works on the stock firmware, whose SELinux is permissive) and falls back to Shizuku when it is running and authorized. Temperatures need Shizuku either way, since reading the log needs the shell user.",
-      "options": ["Auto", "Direct", "Shizuku"],
+      "description": "Auto tries the kiosk process itself first (works on the stock firmware, whose SELinux is permissive), then the projector's own ADB daemon over the loopback address (port 5555 is open with no key on the stock firmware, and it is there after every reboot), then Shizuku. Behind a direct channel the log, and so the temperatures, come through ADB or Shizuku.",
+      "options": ["Auto", "Direct", "ADB", "Shizuku"],
       "default": "Auto",
+      "group": "Projector"
+    },
+    {
+      "key": "adbPort",
+      "type": "number",
+      "title": "ADB port",
+      "description": "The port the projector's own ADB daemon listens on. 5555 on the stock firmware.",
+      "min": 1,
+      "max": 65535,
+      "step": 1,
+      "default": 5555,
+      "group": "Projector"
+    },
+    {
+      "key": "startShizuku",
+      "type": "boolean",
+      "title": "Start Shizuku after a reboot",
+      "description": "When Shizuku is installed and not running, start it through the loopback ADB session at every plugin start, so the other plugins that want it (Network ADB, Device Performance) have it back without anyone touching the projector or Home Assistant.",
+      "default": true,
       "group": "Projector"
     }
   ],

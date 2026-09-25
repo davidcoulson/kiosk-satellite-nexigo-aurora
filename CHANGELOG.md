@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Plugin 0.2.0: a loopback ADB channel. The stock firmware leaves adbd on port 5555 with no
+  key, so the plugin talks to it from the kiosk process itself: in Auto it reads the log (the
+  temperatures) behind the direct channel and carries everything when direct access is refused,
+  and it starts Shizuku after a reboot for the plugins that want it. No Shizuku needed for the
+  temperatures any more.
+
 - Plugin 0.1.4: `am start --user 0` for the settings app and the input switch, so both work when
   Kiosk Satellite runs them from its own process (a remote key mapped to `settings` opened
   nothing before).

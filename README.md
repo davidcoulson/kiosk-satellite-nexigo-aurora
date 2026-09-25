@@ -93,7 +93,11 @@ firmware's `appothermal` runs those from the same temperatures.
    refuses it; a build that declares it can be granted once over ADB and keeps it across reboots.
    Until then those two writes go through Shizuku when it is running, and the projector's own menu
    otherwise. Everything else works without it.
-4. Optional: [Shizuku](https://shizuku.rikka.app/) started over ADB and authorized for Kiosk
+4. Nothing else. The stock firmware leaves the projector's own ADB daemon on port 5555 with no
+   key, and the plugin talks to it from the kiosk process (the **ADB** channel): that is the shell
+   user, so the log and the temperatures come through it behind the direct channel, and it starts
+   [Shizuku](https://shizuku.rikka.app/) after a reboot if Shizuku is installed, for the plugins
+   that want it. Shizuku itself is optional.
    Satellite adds the temperature sensors. A Shizuku started over ADB does not survive a power
    cycle, and this projector cold-boots from standby, so the plugin never depends on it.
 

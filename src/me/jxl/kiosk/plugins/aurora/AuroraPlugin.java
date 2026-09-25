@@ -30,6 +30,7 @@ public final class AuroraPlugin implements KioskPlugin {
     private static final String CHANNEL_AUTO = "Auto";
     private static final String CHANNEL_DIRECT = "Direct";
     private static final String CHANNEL_SHIZUKU = "Shizuku";
+    private static final String CHANNEL_ADB = "ADB";
 
     private final AtomicBoolean alive = new AtomicBoolean();
     private PluginHost host;
@@ -40,6 +41,10 @@ public final class AuroraPlugin implements KioskPlugin {
     private String channelName = "no channel";
     private final Shell.Runner directRunner;
     private final ShizukuFactory shizukuFactory;
+    private final AdbFactory adbFactory;
+    /** A shell-user channel behind a direct one, for the log; null when there is none. */
+    private Shell.Runner extra;
+    private String extraName;
     private Projector.State last = new Projector.State();
     private boolean switchPublished;
     /** The input last selected through this plugin: the pass-through URI does not update the
@@ -86,9 +91,21 @@ public final class AuroraPlugin implements KioskPlugin {
         });
     }
 
+    /** Builds the loopback ADB runner for a port. Tests substitute their own. */
+    interface AdbFactory {
+        Shell.Runner create(int port);
+    }
+
     AuroraPlugin(Shell.Runner directRunner, ShizukuFactory shizukuFactory) {
+        this(directRunner, shizukuFactory, new AdbFactory() {
+            @Override public Shell.Runner create(int port) { return Shell.adb(port); }
+        });
+    }
+
+    AuroraPlugin(Shell.Runner directRunner, ShizukuFactory shizukuFactory, AdbFactory adbFactory) {
         this.directRunner = directRunner;
         this.shizukuFactory = shizukuFactory;
+        this.adbFactory = adbFactory;
     }
 
     @Override public void start(PluginHost host, Map<String, Object> settings) {
@@ -227,23 +244,55 @@ public final class AuroraPlugin implements KioskPlugin {
     /** Picks the channel from the setting and what the projector accepts, then reads once. */
     private void detect() {
         String want = String.valueOf(settings.get("channel"));
-        runner = null;
-        if (!CHANNEL_SHIZUKU.equals(want)) {
+        runner = null; extra = null; extraName = null;
+        int port = adbPort();
+        Shell.Runner adb = adbFactory.create(port);
+        boolean adbUp = false;
+        if (CHANNEL_ADB.equals(want)) {
+            adbUp = adbOk(adb);
+            if (adbUp) { runner = adb; channelName = "ADB"; }
+            else { status("The projector's ADB daemon did not answer on 127.0.0.1:" + port + ". Turn on network ADB, or pick another channel.", true); return; }
+        } else if (!CHANNEL_SHIZUKU.equals(want)) {
             Shell.Result probe = directRunner.run(Projector.PROBE_SCRIPT, 4000);
             if (probe.ok()) { runner = directRunner; channelName = "direct"; }
-            else if (CHANNEL_DIRECT.equals(want)) { status("The kiosk process cannot reach the projector's tools directly (" + probe.why() + "). Try Shizuku.", true); return; }
+            else if (CHANNEL_DIRECT.equals(want)) { status("The kiosk process cannot reach the projector's tools directly (" + probe.why() + "). Try ADB or Shizuku.", true); return; }
+        }
+        if (runner == null && CHANNEL_AUTO.equals(want)) {
+            adbUp = adbOk(adb);
+            if (adbUp) { runner = adb; channelName = "ADB"; }
         }
         if (runner == null) {
             if (Shell.shizukuGranted(host)) { runner = shizukuFactory.create(host); channelName = "Shizuku"; }
             else {
                 status(CHANNEL_SHIZUKU.equals(want)
                     ? "Shizuku is not running or not authorized for Kiosk Satellite."
-                    : "No way to reach the projector: direct access was refused and Shizuku is not authorized.", true);
+                    : "No way to reach the projector: direct access was refused, adbd did not answer and Shizuku is not authorized.", true);
                 return;
             }
         }
+        // The log (temperatures) needs the shell user. Behind a direct channel, the projector's
+        // own adbd is the first choice, since it is there after every reboot; Shizuku the second.
+        if (runner == directRunner) {
+            if (adbUp || adbOk(adb)) { extra = adb; extraName = "ADB"; }
+            else if (Shell.shizukuGranted(host)) { extra = shizukuFactory.create(host); extraName = "Shizuku"; }
+        }
+        // Shizuku for the other plugins: a loopback ADB session can start it after a reboot, which
+        // is the one thing Shizuku cannot do for itself without root.
+        Shell.Runner shellUser = runner == adb ? runner : (extra == adb ? extra : null);
+        if (shellUser != null && Boolean.TRUE.equals(settings.get("startShizuku"))) shellUser.run(Projector.SHIZUKU_START_SCRIPT, 15000);
         if (Boolean.TRUE.equals(settings.get("stayOn"))) runner.run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         poll();
+    }
+
+    private static boolean adbOk(Shell.Runner adb) {
+        Shell.Result r = adb.run(Projector.ADB_PROBE_SCRIPT, 4000);
+        return r.ok() && r.stdout.contains("uid=2000");
+    }
+
+    private int adbPort() {
+        Object v = settings.get("adbPort");
+        int port = v instanceof Number ? ((Number) v).intValue() : 5555;
+        return port >= 1 && port <= 65535 ? port : 5555;
     }
 
     private void command(String script, String what) {
@@ -257,6 +306,12 @@ public final class AuroraPlugin implements KioskPlugin {
         Shell.Result r = runner.run(Projector.POLL_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         if (!r.ok()) { status("Could not read the projector via " + channelName + ": " + r.why(), true); return; }
         Projector.State s = Projector.parse(r.stdout);
+        // The log answers only the shell user: behind a direct channel, the shell-user channel
+        // reads that one line.
+        if (s.temperatures.isEmpty() && extra != null) {
+            Shell.Result more = extra.run(Projector.TEMPS_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
+            if (more.ok()) s.temperatures.putAll(Projector.parse(more.stdout).temperatures);
+        }
         // The settings command answers only the shell user; from the kiosk process the framework
         // answers instead, and it wins whenever it has a value.
         fill(s, "picture_mode", "mode");
@@ -331,6 +386,7 @@ public final class AuroraPlugin implements KioskPlugin {
                 : " · CEC standby not ignored yet");
         }
         text.append(" · via ").append(channelName);
+        if (extraName != null) text.append(" (+").append(extraName).append(" for the log)");
         if (!switchPublished) text.append(". The Picture switch appears once the light state has been read.");
         status(text.toString(), false);
     }

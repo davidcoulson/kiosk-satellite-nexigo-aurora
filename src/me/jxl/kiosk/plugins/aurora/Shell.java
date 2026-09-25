@@ -25,7 +25,11 @@ import me.jxl.kiosk.plugins.PluginHost;
  * everything, but a Shizuku started over ADB does not survive a power cycle, and this projector
  * cold-boots from standby, so it is the optional channel here rather than the required one.
  *
- * <p>Both return the same {@link Result}; the plugin never cares which one answered except to
+ * <p><b>ADB</b> is the projector's own adbd over the loopback address ({@link Adb}): the stock
+ * firmware leaves port 5555 open with no key, so this is the shell user too, and it survives a
+ * reboot. In Auto it is what reads the log behind a direct channel, and what starts Shizuku.
+ *
+ * <p>All return the same {@link Result}; the plugin never cares which one answered except to
  * say so in its status line.
  */
 final class Shell {
@@ -142,6 +146,13 @@ final class Shell {
                 Result r = result.get();
                 return r == null ? Result.failure("Shizuku did not answer") : r;
             }
+        };
+    }
+
+    /** The script through the projector's own adbd on the loopback address, as the shell user. */
+    static Runner adb(final int port) {
+        return new Runner() {
+            @Override public Result run(String script, int timeoutMs) { return Adb.run("127.0.0.1", port, script, timeoutMs); }
         };
     }
 

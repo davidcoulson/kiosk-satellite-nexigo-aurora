@@ -17,7 +17,7 @@ assert set(manifest['capabilities']) == {'entities', 'shizuku'}
 sources = [*sorted((root / 'sdk/src').rglob('*.java')), *sorted((root / 'src').rglob('*.java')), *sorted((root / 'tests').rglob('*.java'))]
 with tempfile.TemporaryDirectory(prefix='kiosk-plugin-test-') as directory:
     subprocess.run([tool('javac'), '--release', '8', '-Xlint:-options', '-d', directory, *map(str, sources)], check=True)
-    for test in ['AuroraPluginTest', 'ManifestContractTest']:
+    for test in ['AuroraPluginTest', 'AdbTest', 'ManifestContractTest']:
         subprocess.run([tool('java'), '-ea', '-cp', directory, test], check=True, cwd=root)
 
 subprocess.run([sys.executable, str(root / 'tools/test_android_sdk.py')], check=True)

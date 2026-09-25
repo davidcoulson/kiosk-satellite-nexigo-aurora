@@ -67,6 +67,57 @@ public final class AuroraPluginTestAccess {
         counter();
         framework();
         fallback();
+        loopback();
+    }
+
+    /** Answers like the projector's own adbd: the shell user, and the log line. */
+    static class FakeAdb implements Shell.Runner {
+        final List<String> scripts = Collections.synchronizedList(new ArrayList<String>());
+        volatile boolean up = true;
+        @Override public Shell.Result run(String script, int timeoutMs) {
+            scripts.add(script);
+            if (!up) return Shell.Result.failure("adbd on 127.0.0.1:5555: Connection refused");
+            if (script.equals(Projector.ADB_PROBE_SCRIPT)) return new Shell.Result(0, "uid=2000(shell) gid=2000(shell)\n", "", false);
+            if (script.equals(Projector.TEMPS_SCRIPT)) return new Shell.Result(0, "temps=AT+Temperature#NtcRedLaser1:41,NtcDmd1:44\n", "", false);
+            return new Shell.Result(0, "", "", false);
+        }
+    }
+
+    /** Direct for the commands, the projector's own adbd for the log, and Shizuku started through it. */
+    static void loopback() throws Exception {
+        FakeShell shell = new FakeShell();
+        shell.pollAnswer = POLL_ANSWER.replaceAll("temps=[^\n]*\n", "temps=\n");
+        final FakeAdb adb = new FakeAdb();
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null, new AuroraPlugin.AdbFactory() { @Override public Shell.Runner create(int port) { assert port == 5555 : "default port"; return adb; } });
+        Map<String, Object> s = settings("Auto", 30);
+        s.put("startShizuku", true);
+        plugin.start(host, s);
+        waitFor(host, "picture");
+        Thread.sleep(150);
+        assert shell.scripts.contains(Projector.POLL_SCRIPT) : "the poll still runs direct";
+        assert adb.scripts.contains(Projector.ADB_PROBE_SCRIPT) : "adbd probed";
+        assert adb.scripts.contains(Projector.SHIZUKU_START_SCRIPT) : "Shizuku started through adbd";
+        assert adb.scripts.contains(Projector.TEMPS_SCRIPT) : "the log read through adbd";
+        assert Math.abs((Double) host.sensors.get("temp_dmd") - 44) < 1e-9 : "DMD temperature from the loopback read: " + host.sensors.get("temp_dmd");
+        assert host.status.contains("via direct (+ADB for the log)") : "status names both: " + host.status;
+        plugin.stop();
+
+        // Direct refused and adbd up: ADB carries everything.
+        FakeShell down = new FakeShell();
+        down.probeOk = false;
+        FakeAdb adb2 = new FakeAdb() { @Override public Shell.Result run(String script, int timeoutMs) {
+            if (script.equals(Projector.POLL_SCRIPT)) { scripts.add(script); return new Shell.Result(0, POLL_ANSWER, "", false); }
+            return super.run(script, timeoutMs);
+        } };
+        FakeHost host2 = new FakeHost();
+        final FakeAdb a2 = adb2;
+        AuroraPlugin plugin2 = new AuroraPlugin(down, null, new AuroraPlugin.AdbFactory() { @Override public Shell.Runner create(int port) { return a2; } });
+        plugin2.start(host2, settings("Auto", 30));
+        waitFor(host2, "picture");
+        assert host2.status.contains("via ADB") : "ADB is the channel when direct is refused: " + host2.status;
+        assert Math.abs((Double) host2.sensors.get("temp_dmd") - 37) < 1e-9 : "temperatures come with the poll over ADB";
+        plugin2.stop();
     }
 
     static void parsing() {
