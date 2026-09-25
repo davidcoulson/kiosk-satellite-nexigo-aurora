@@ -1,0 +1,80 @@
+All binderized services (registered services through hwservicemanager)
+R Interface                                                                    Thread Use Server Clients
+Y android.frameworks.displayservice@1.0::IDisplayService/default               0/1        3079   2560
+Y android.frameworks.schedulerservice@1.0::ISchedulingPolicyService/default    0/5        3462   2560
+Y android.frameworks.sensorservice@1.0::ISensorManager/default                 0/5        3462   2560
+Y android.hardware.audio.effect@4.0::IEffectsFactory/default                   0/4        3039   3077 2560
+Y android.hardware.audio@4.0::IDevicesFactory/default                          0/4        3039   3077 2560
+Y android.hardware.bluetooth@1.0::IBluetoothHci/default                        0/2        3025   4177 2560
+Y android.hardware.camera.provider@2.4::ICameraProvider/external/0             0/2        3047   3024 2560
+Y android.hardware.camera.provider@2.4::ICameraProvider/legacy/0               0/3        3026   3024 2560
+Y android.hardware.cas@1.0::IMediaCasService/default                           0/1        3027   2560
+Y android.hardware.configstore@1.0::ISurfaceFlingerConfigs/default             0/3        2719   6544 3790 3814 3746 3462 3079 2560
+Y android.hardware.configstore@1.1::ISurfaceFlingerConfigs/default             0/3        2719   6544 3790 3814 3746 3462 3079 2560
+Y android.hardware.drm@1.0::ICryptoFactory/clearkey                            0/2        3029   2560
+Y android.hardware.drm@1.0::ICryptoFactory/default                             0/2        3028   2560
+Y android.hardware.drm@1.0::ICryptoFactory/widevine                            0/2        3030   2560
+Y android.hardware.drm@1.0::IDrmFactory/clearkey                               0/2        3029   2560
+Y android.hardware.drm@1.0::IDrmFactory/default                                0/2        3028   2560
+Y android.hardware.drm@1.0::IDrmFactory/widevine                               0/2        3030   3297 2560
+Y android.hardware.drm@1.1::ICryptoFactory/clearkey                            0/2        3029   2560
+Y android.hardware.drm@1.1::ICryptoFactory/widevine                            0/2        3030   2560
+Y android.hardware.drm@1.1::IDrmFactory/clearkey                               0/2        3029   2560
+Y android.hardware.drm@1.1::IDrmFactory/widevine                               0/2        3030   3297 2560
+Y android.hardware.gatekeeper@1.0::IGatekeeper/default                         0/1        3031   3320 2560
+Y android.hardware.graphics.allocator@2.0::IAllocator/default                  0/3        3032   2737 3079 2560
+Y android.hardware.graphics.composer@2.1::IComposer/default                    0/3        2737   3079 2560
+Y android.hardware.graphics.composer@2.2::IComposer/default                    0/3        2737   3079 2560
+Y android.hardware.health@2.0::IHealth/default                                 1/1        3033   3462 3302 2560
+Y android.hardware.keymaster@3.0::IKeymasterDevice/default                     0/1        2704   3296 2560
+Y android.hardware.light@2.0::ILight/default                                   0/1        3040   3462 2560
+Y android.hardware.media.omx@1.0::IOmx/default                                 0/6        3305   2560 2560
+Y android.hardware.media.omx@1.0::IOmxStore/default                            0/6        3305   3300 2560
+Y android.hardware.memtrack@1.0::IMemtrack/default                             0/1        3034   2560
+Y android.hardware.neuralnetworks@1.0::IDevice/gpunn                           0/1        3035   2560
+Y android.hardware.neuralnetworks@1.0::IDevice/neuron-ann                      0/2        3036   2560
+Y android.hardware.neuralnetworks@1.1::IDevice/gpunn                           0/1        3035   2560
+Y android.hardware.neuralnetworks@1.1::IDevice/neuron-ann                      0/2        3036   2560
+Y android.hardware.power@1.0::IPower/default                                   0/1        3041   3462 2560
+Y android.hardware.tv.cec@1.0::IHdmiCec/default                                0/1        3037   3462 2560
+Y android.hardware.tv.input@1.0::ITvInput/default                              0/1        3038   3462 2560
+Y android.hardware.wifi.supplicant@1.0::ISupplicant/default                    1/1        3838   3462 2560
+Y android.hardware.wifi.supplicant@1.1::ISupplicant/default                    1/1        3838   3462 2560
+Y android.hidl.allocator@1.0::IAllocator/ashmem                                0/1        3023   2560
+Y android.hidl.base@1.0::IBase/apunp                                           0/2        3036   2560
+Y android.hidl.base@1.0::IBase/ashmem                                          0/1        3023   2560
+Y android.hidl.base@1.0::IBase/clearkey                                        0/2        3029   2560
+Y android.hidl.base@1.0::IBase/default                                         1/1        3838   2560
+Y android.hidl.base@1.0::IBase/external/0                                      0/2        3047   3024 2560
+Y android.hidl.base@1.0::IBase/gpunn                                           0/1        3035   2560
+Y android.hidl.base@1.0::IBase/legacy/0                                        0/3        3026   3024 2560
+Y android.hidl.base@1.0::IBase/neuron-ann                                      0/2        3036   2560
+Y android.hidl.base@1.0::IBase/widevine                                        0/2        3030   2560
+Y android.hidl.manager@1.0::IServiceManager/default                            0/1        2560   3462
+Y android.hidl.manager@1.1::IServiceManager/default                            0/1        2560   3462
+Y android.hidl.token@1.0::ITokenManager/default                                0/1        2560   
+Y android.system.net.netd@1.0::INetd/default                                   0/1        2933   2560
+Y android.system.net.netd@1.1::INetd/default                                   0/1        2933   2560
+Y android.system.wifi.keystore@1.0::IKeystore/default                          0/1        3296   2560
+  mstar.hardware.hwcomposer.composer@2.3::IComposer/default                    0/3        2737   3079 2560
+  mstar.hardware.imgdisp@1.0::IImgDisp/default                                 0/1        3042   2560
+  mstar.hardware.imghwdec@1.0::IImgHwDec/default                               0/1        3043   2560
+  mstar.hardware.intertunnel@1.0::IInterTunnel/default                         0/6        3305   2560
+Y mstar.hardware.light@2.0::IMstarLight/default                                0/1        3040   3462 2560
+  mstar.hardware.mmdisp@1.0::IMmDisp/default                                   0/3        3044   3305 2560
+Y mstar.hardware.power@1.1::IMstarPower/default                                0/1        3041   3462 2560
+  vendor.appotronics.projectormanager@1.0::IProjectorManager/default           0/5        3045   6262 4493 3790 3287 2560
+  vendor.mediatek.camera.provider@2.4::IMtkCameraProvider/external/0           0/2        3047   3024 2560
+  vendor.mediatek.hardware.neuropilot@1.0::INPDevice/apunp                     0/2        3036   2560
+Y vendor.mediatek.hardware.tv.networkproxy@1.0::INetworkProxy/default          0/3        3048   6095 2560
+  vendor.mediatek.hardware.wifi.supplicant@1.0::IMtkSupplicantP2pIface/default 1/1        3838   2560
+Y vendor.mediatek.tv.Mm.Mm.mtktvfapicustom@1.0::IMtkTvFApiCustom/default       0/4        3075   2560
+Y vendor.mediatek.tv.mtkdmservice@1.0::IMtkDmCommon/default                    0/3        3052   3790 2560
+Y vendor.mediatek.tv.mtkmtalservice@1.0::IMtkMediaPluginService/default        0/2        3053   2560
+Y vendor.mediatek.tv.mtkmtalservice@1.0::IMtkOsdService/default                0/2        3053   2560
+Y vendor.mediatek.tv.mtkmtalservice@1.0::IMtkPhotoService/default              0/2        3053   2560
+Y vendor.mediatek.tv.mtkmtalservice@1.0::IMtkVssService/default                0/2        3053   2560
+Y vendor.mediatek.tv.mtkrm@1.0::IMtkRm/default                                 0/3        3062   3044 3305 2560
+Y vendor.mediatek.tv.mtktvaipq@1.0::IMtkTvAipq/default                         0/2        3065   3814 2560
+Y vendor.mediatek.tv.mtktvapi@1.0::IMtkTvApi/default                           0/8        3066   6095 4292 3814 4221 3790 3045 2560
+Y vendor.mediatek.tv.mtktvapi@1.0::IMtkTvApiBroadcast/default                  0/8        3066   4510 3790 2560

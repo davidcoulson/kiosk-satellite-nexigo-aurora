@@ -1,0 +1,30 @@
+# projector-test functions, as the tool prints them
+projector-test arg err!
+use :
+projector-test <fun> .... 
+fun:
+ GetHdmiColorDepth
+ getPlatformProperty
+ getSegmentRGBY
+ getVersion
+ powerDown
+ readSocReg
+ set3DMode
+ setAppoLeds
+ setAudioMode
+ setCurrentRGBY
+ setDBEnable
+ setDBScope
+ setDLP_LookMode
+ setHighFreqMode
+ setHsg
+ setKeyStoneTable
+ setLightSourceOnOff
+ setLowLatencyModeOnOff
+ setMutexMode
+ setPassThroughOnOff
+ setPlatformProperty
+ setSegmentRGBY
+ setUsbFunc
+ setUsbSel0Ctrl
+ writeSocReg

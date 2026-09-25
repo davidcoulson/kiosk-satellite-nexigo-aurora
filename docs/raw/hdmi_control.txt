@@ -1,0 +1,50 @@
+mHdmiControlEnabled: true
+mProhibitMode: false
+mCecController: 
+  HdmiCecLocalDevice #0:
+    mDeviceType: 0
+    mAddress: 0
+    mPreferredAddress: 0
+    mDeviceInfo: CEC: logical_address: 0x00 device_type: 0 vendor_id: 7173227 display_name: AURORA PRO power_status: -1 physical_address: 0x0000 port_id: -1
+    mActiveSource: (invalid, invalid)
+    mActiveRoutingPath: 0x1000
+    mArcEstablished: false
+    mArcFeatureEnabled: {1=true, 2=false, 3=false, 4=false}
+    mSystemAudioActivated: false
+    mSystemAudioMute: false
+    mSystemAudioControlFeatureEnabled: false
+    mAutoDeviceOff: true
+    mAutoWakeup: true
+    mSkipRoutingControl: false
+    mPrevPortId: -1
+    CEC devices:
+      CEC: logical_address: 0x00 device_type: 0 vendor_id: 7173227 display_name: AURORA PRO power_status: -1 physical_address: 0x0000 port_id: -1
+      CEC: logical_address: 0x04 device_type: 4 vendor_id: 4346 display_name: Apple TV power_status: 0 physical_address: 0x1000 port_id: 1
+  CEC message history:
+    [R] time=2026-09-25 06:19:33 message=<Give Device Power Status> src: 4, dst: 0
+    [S] time=2026-09-25 06:19:33 message=<Report Power Status> src: 0, dst: 4, params: 00
+    [R] time=2026-09-25 06:19:33 message=<Get Cec Version> src: 4, dst: 0
+    [S] time=2026-09-25 06:19:33 message=<Cec Version> src: 0, dst: 4, params: 05
+    [R] time=2026-09-25 06:19:33 message=<Give Device Vendor Id> src: 4, dst: 0
+    [S] time=2026-09-25 06:19:33 message=<Device Vendor Id> src: 0, dst: 15, params: 6D 74 6B
+    [S] time=2026-09-25 06:20:16 message=<Give Device Power Status> src: 0, dst: 4
+    [R] time=2026-09-25 06:20:16 message=<Report Power Status> src: 4, dst: 0, params: 00
+    [S] time=2026-09-25 06:21:16 message=<Give Device Power Status> src: 0, dst: 4
+    [R] time=2026-09-25 06:21:16 message=<Report Power Status> src: 4, dst: 0, params: 00
+    [S] time=2026-09-25 06:22:16 message=<Give Device Power Status> src: 0, dst: 4
+    [R] time=2026-09-25 06:22:16 message=<Report Power Status> src: 4, dst: 0, params: 00
+    [S] time=2026-09-25 06:23:16 message=<Give Device Power Status> src: 0, dst: 4
+    [R] time=2026-09-25 06:23:16 message=<Report Power Status> src: 4, dst: 0, params: 00
+    [S] time=2026-09-25 06:24:16 message=<Give Device Power Status> src: 0, dst: 4
+    [R] time=2026-09-25 06:24:16 message=<Report Power Status> src: 4, dst: 0, params: 00
+    [S] time=2026-09-25 06:25:16 message=<Give Device Power Status> src: 0, dst: 4
+    [R] time=2026-09-25 06:25:16 message=<Report Power Status> src: 4, dst: 0, params: 00
+    [S] time=2026-09-25 06:26:16 message=<Give Device Power Status> src: 0, dst: 4
+    [R] time=2026-09-25 06:26:16 message=<Report Power Status> src: 4, dst: 0, params: 00
+mMhlController: 
+mPortInfo: 
+  - port_id: 1, address: 0x1000, cec: true, arc: true, mhl: false
+  - port_id: 2, address: 0x2000, cec: true, arc: false, mhl: false
+  - port_id: 3, address: 0x3000, cec: true, arc: false, mhl: false
+  - port_id: 4, address: 0x4000, cec: true, arc: false, mhl: false
+mPowerStatus: 0

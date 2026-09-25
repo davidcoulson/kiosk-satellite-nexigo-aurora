@@ -1,0 +1,1661 @@
+#### com.appotronics.support (system framework jar)
+== Lcom/appotronics/support/ProjectorManager$1;
+    run()V
+== Lcom/appotronics/support/ProjectorManager$ProjectorManagerDeathRecipient;
+    serviceDied(J)V
+== Lcom/appotronics/support/ProjectorManager;
+    InvokeEvent(I I I I)I
+    enterSleepMode(I)I
+    getAllTemperatures()Ljava/util/ArrayList;
+    getAudioMode(I)I
+    getBrightnessMode()I
+    getColorWheelDelay()I
+    getColorWheelSpeed()I
+    getCurrentGammaIndex()I
+    getCurrentRGBY()Ljava/util/ArrayList;
+    getEeprom(Ljava/lang/String;)Ljava/lang/String;
+    getEventSwitchStatus()I
+    getFanDutyCycle(I)I
+    getFanSpeed(I)I
+    getGammaIndex(I I)I
+    getHdmiColorDepth()I
+    getHdrAvgFALL()I
+    getHdrMaxCLL()I
+    getHighFreqMode()I
+    getHsgData()Ljava/util/ArrayList;
+    getHsgData(I I)Ljava/util/ArrayList;
+    getInstallationMode()I
+    getInstance()Lcom/appotronics/support/ProjectorManager;
+    getLightSourceTime()J
+    getLookIndex()I
+    getMaxLuminance()I
+    getMinLuminance()I
+    getPlatformProperty(Ljava/lang/String;)Ljava/lang/String;
+    getSavedManualWarpTable(I I)Ljava/util/ArrayList;
+    getSegmentRGBY()Ljava/util/ArrayList;
+    getTvHardwareVersion()Ljava/lang/String;
+    getUsbFunc()I
+    getVersion(I)Ljava/lang/String;
+    getXprMode()I
+    is3DSyncInvert()Z
+    isBrilliantColorOn()Z
+    isHdrEnable()Z
+    isIrBodyDetectOn()Z
+    isLightSourceOn()Z
+    isLowLatencyModeOn()Z
+    isManualWarpOn()Z
+    isSmoothWarpEnable()Z
+    motorBackward()I
+    motorForward()I
+    reconnect()V
+    resetHdmiHpd(I)I
+    resetHsg(I I)I
+    resetPlatformData()I
+    saveManualWarpTable(Ljava/util/ArrayList; I I)I
+    set3DMode(I I)I
+    set3DSyncInvert(Z)I
+    setAppoLeds(I I)I
+    setAtTimeout(I)I
+    setAudioLRMode(I Z)I
+    setAudioMode(I I)I
+    setBrightnessMode(I)I
+    setBrilliantColorOnOff(Z)I
+    setColorWheelDelay(I)I
+    setControlPointsLayout(I I)I
+    setCurrentRGBY(I I I I)I
+    setDBEnable(Z)I
+    setDBScope(I I)I
+    setDLP_LookMode(I)I
+    setEeprom(Ljava/lang/String; Ljava/lang/String;)I
+    setFanDutyCycle(I I)I
+    setGammaIndex(I I I Z)I
+    setHdcpKey(I [B)I
+    setHdcpKeyFile(I Ljava/lang/String;)I
+    setHdrEnable(Z)I
+    setHdrLevel(I I)Z
+    setHighFreqMode(I)I
+    setHsgData(I I Ljava/util/ArrayList; Z)I
+    setHsgData(Ljava/util/ArrayList;)I
+    setHsgIndex(I)I
+    setInstallationMode(I)I
+    setIrBodyDetectOnOff(Z)I
+    setKeyStoneTable(Ljava/util/ArrayList;)I
+    setLightSourceOnOff(Z)I
+    setLightSourceTime(J)I
+    setLookIndex(I)I
+    setLowLatencyModeOnOff(Z)I
+    setManualWarpOnOff(Z)I
+    setManualWarpPoint(I I I I)I
+    setManualWarpTable(Ljava/util/ArrayList;)I
+    setPanel(I)I
+    setPassThroughOnOff(Z)I
+    setPlatformProperty(Ljava/lang/String; Ljava/lang/String;)I
+    setSegmentRGBY(I I I I)I
+    setSmoothWarpEnable(Z)I
+    setSmoothWarpTable(Ljava/util/ArrayList;)I
+    setTestPattern(Ljava/lang/String;)I
+    setUsbFunc(I)I
+    setUsbSel0Ctrl(I)I
+    setVrrEnable(Z)I
+    setXprMode(I)I
+== Lcom/appotronics/support/datatype/Constants$InstallationMode$1;
+    put(Ljava/lang/Object; Ljava/lang/Object;)Ljava/lang/Object;
+== Lcom/appotronics/support/datatype/Constants$InstallationMode;
+    int2String(I)Ljava/lang/String;
+    string2Int(Ljava/lang/String;)I
+== Lcom/appotronics/support/datatype/Constants$Temperature$1;
+    put(Ljava/lang/Object; Ljava/lang/Object;)Ljava/lang/Object;
+== Lcom/appotronics/support/datatype/Constants$Temperature;
+    int2String(I)Ljava/lang/String;
+    string2Int(Ljava/lang/String;)I
+== Lcom/appotronics/support/datatype/Constants$Version$1;
+    put(Ljava/lang/Object; Ljava/lang/Object;)Ljava/lang/Object;
+== Lcom/appotronics/support/datatype/Constants$Version;
+    int2String(I)Ljava/lang/String;
+    string2Int(Ljava/lang/String;)I
+== Lcom/appotronics/support/interfaces/IProjectorManager;
+    InvokeEvent(I I I I)I
+    enterSleepMode(I)I
+    getAllTemperatures()Ljava/util/ArrayList;
+    getAudioMode(I)I
+    getBrightnessMode()I
+    getColorWheelDelay()I
+    getColorWheelSpeed()I
+    getCurrentGammaIndex()I
+    getCurrentRGBY()Ljava/util/ArrayList;
+    getEeprom(Ljava/lang/String;)Ljava/lang/String;
+    getEventSwitchStatus()I
+    getFanDutyCycle(I)I
+    getFanSpeed(I)I
+    getGammaIndex(I I)I
+    getHdmiColorDepth()I
+    getHdrAvgFALL()I
+    getHdrMaxCLL()I
+    getHighFreqMode()I
+    getHsgData()Ljava/util/ArrayList;
+    getHsgData(I I)Ljava/util/ArrayList;
+    getInstallationMode()I
+    getLightSourceTime()J
+    getLookIndex()I
+    getMaxLuminance()I
+    getMinLuminance()I
+    getPlatformProperty(Ljava/lang/String;)Ljava/lang/String;
+    getSavedManualWarpTable(I I)Ljava/util/ArrayList;
+    getSegmentRGBY()Ljava/util/ArrayList;
+    getTvHardwareVersion()Ljava/lang/String;
+    getUsbFunc()I
+    getVersion(I)Ljava/lang/String;
+    getXprMode()I
+    is3DSyncInvert()Z
+    isBrilliantColorOn()Z
+    isHdrEnable()Z
+    isIrBodyDetectOn()Z
+    isLightSourceOn()Z
+    isLowLatencyModeOn()Z
+    isManualWarpOn()Z
+    isSmoothWarpEnable()Z
+    motorBackward()I
+    motorForward()I
+    resetHdmiHpd(I)I
+    resetHsg(I I)I
+    resetPlatformData()I
+    saveManualWarpTable(Ljava/util/ArrayList; I I)I
+    set3DMode(I I)I
+    set3DSyncInvert(Z)I
+    setAppoLeds(I I)I
+    setAtTimeout(I)I
+    setAudioLRMode(I Z)I
+    setAudioMode(I I)I
+    setBrightnessMode(I)I
+    setBrilliantColorOnOff(Z)I
+    setColorWheelDelay(I)I
+    setControlPointsLayout(I I)I
+    setCurrentRGBY(I I I I)I
+    setDBEnable(Z)I
+    setDBScope(I I)I
+    setDLP_LookMode(I)I
+    setEeprom(Ljava/lang/String; Ljava/lang/String;)I
+    setFanDutyCycle(I I)I
+    setGammaIndex(I I I Z)I
+    setHdcpKey(I [B)I
+    setHdcpKeyFile(I Ljava/lang/String;)I
+    setHdrEnable(Z)I
+    setHdrLevel(I I)Z
+    setHighFreqMode(I)I
+    setHsgData(I I Ljava/util/ArrayList; Z)I
+    setHsgData(Ljava/util/ArrayList;)I
+    setHsgIndex(I)I
+    setInstallationMode(I)I
+    setIrBodyDetectOnOff(Z)I
+    setKeyStoneTable(Ljava/util/ArrayList;)I
+    setLightSourceOnOff(Z)I
+    setLightSourceTime(J)I
+    setLookIndex(I)I
+    setLowLatencyModeOnOff(Z)I
+    setManualWarpOnOff(Z)I
+    setManualWarpPoint(I I I I)I
+    setManualWarpTable(Ljava/util/ArrayList;)I
+    setPanel(I)I
+    setPassThroughOnOff(Z)I
+    setPlatformProperty(Ljava/lang/String; Ljava/lang/String;)I
+    setSegmentRGBY(I I I I)I
+    setSmoothWarpEnable(Z)I
+    setSmoothWarpTable(Ljava/util/ArrayList;)I
+    setTestPattern(Ljava/lang/String;)I
+    setUsbFunc(I)I
+    setUsbSel0Ctrl(I)I
+    setVrrEnable(Z)I
+    setXprMode(I)I
+
+#### BackgroundService: com.appo.tv interfaces, constants, services, behaviours
+== Lcom/appo/backgroundservice/BaseService$IncomingHandler; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+== Lcom/appo/backgroundservice/BaseService; extends Landroid/app/Service;
+    handleMessage(Landroid/os/Message;)V
+    onBind(Landroid/content/Intent;)Landroid/os/IBinder;
+    onCreate()V
+    onDestroy()V
+    onStartCommand(Landroid/content/Intent; I I)I
+== Lcom/appo/backgroundservice/BodySensorService$1; extends Landroid/os/UEventObserver;
+    onUEvent(Landroid/os/UEventObserver$UEvent;)V
+== Lcom/appo/backgroundservice/BodySensorService$2$1; 
+    onClick(Landroid/view/View;)V
+== Lcom/appo/backgroundservice/BodySensorService$2$2; 
+    onClick(Landroid/view/View;)V
+== Lcom/appo/backgroundservice/BodySensorService$2; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+    sendEmptyMessage(I)Z
+    sendEmptyMessageDelayed(I J)Z
+== Lcom/appo/backgroundservice/BodySensorService$3; extends Landroid/content/BroadcastReceiver;
+    onReceive(Landroid/content/Context; Landroid/content/Intent;)V
+== Lcom/appo/backgroundservice/BodySensorService$4; 
+    onFocusChange(Landroid/view/View; Z)V
+== Lcom/appo/backgroundservice/BodySensorService; extends Lcom/appo/backgroundservice/BaseService;
+    dismissDialog(Landroid/content/Context;)V
+    getResources()Landroid/content/res/Resources;
+    getString(I)Ljava/lang/String;
+    handleMessage(Landroid/os/Message;)V
+    isInBodydetectState()Z
+    notifyBodyDetectChanged(Z)V
+    onStartCommand(Landroid/content/Intent; I I)I
+    registeReceiver()V
+    registerReceiver(Landroid/content/BroadcastReceiver; Landroid/content/IntentFilter;)Landroid/content/Intent;
+    sendBroadcast(Landroid/content/Intent;)V
+    showBodyDialog(Landroid/content/Context;)V
+    unregisterReceiver(Landroid/content/BroadcastReceiver;)V
+== Lcom/appo/backgroundservice/BootInitService$mDeviceManager$2; extends Lkotlin/jvm/internal/Lambda;
+    invoke()Lcom/appo/tv/DeviceManager;
+    invoke()Ljava/lang/Object;
+== Lcom/appo/backgroundservice/BootInitService$movieWarmData$2; extends Lkotlin/jvm/internal/Lambda;
+    invoke()Ljava/lang/Object;
+    invoke()[I
+== Lcom/appo/backgroundservice/BootInitService; extends Landroid/app/IntentService;
+    ensureCurrentWBAvailable()V
+    ensureDefaultWBAvailable()V
+    getMDeviceManager()Lcom/appo/tv/DeviceManager;
+    getMovieWarmData()[I
+    getResources()Landroid/content/res/Resources;
+    initCinema75()V
+    initMovie75()V
+    initScreenType()V
+    initSettings()V
+    initVividTemp()V
+    isWBFileValid(Ljava/lang/String;)Z
+    onHandleIntent(Landroid/content/Intent;)V
+== Lcom/appo/backgroundservice/CommonDialog$1; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+    removeMessages(I)V
+    sendMessageDelayed(Landroid/os/Message; J)Z
+== Lcom/appo/backgroundservice/CommonDialog$2; 
+    onDismiss(Landroid/content/DialogInterface;)V
+== Lcom/appo/backgroundservice/CommonDialog$onDialogTimeFinished; 
+    onTimeFinished()V
+== Lcom/appo/backgroundservice/CommonDialog; 
+    createDialog(Landroid/content/Context; Ljava/lang/String; Ljava/lang/String; Landroid/content/DialogInterface$OnClickListener;)Lcom/appo/backgroundservice/view/CustomDialog;
+    createDialog(Landroid/content/Context; Ljava/lang/String;)Lcom/appo/backgroundservice/view/CustomDialog;
+    createTimerDialog(Landroid/content/Context; Ljava/lang/String; Ljava/lang/String; I Landroid/content/DialogInterface$OnClickListener; Lcom/appo/backgroundservice/CommonDialog$onDialogTimeFinished;)Lcom/appo/backgroundservice/view/CustomDialog;
+== Lcom/appo/backgroundservice/ContentObserverService$SettingsObserver$dismissALLMDialog$1; extends Lkotlin/jvm/internal/MutablePropertyReference0Impl;
+    get()Ljava/lang/Object;
+    set(Ljava/lang/Object;)V
+== Lcom/appo/backgroundservice/ContentObserverService$SettingsObserver$homeKeyReceiver$2$1; extends Lkotlin/jvm/internal/Lambda;
+    invoke()Ljava/lang/Object;
+    invoke()V
+== Lcom/appo/backgroundservice/ContentObserverService$SettingsObserver$homeKeyReceiver$2; extends Lkotlin/jvm/internal/Lambda;
+    invoke()Lcom/appo/backgroundservice/receiver/HomeKeyReceiver;
+    invoke()Ljava/lang/Object;
+== Lcom/appo/backgroundservice/ContentObserverService$SettingsObserver$showALLMDialog$1; extends Lkotlin/jvm/internal/MutablePropertyReference0Impl;
+    get()Ljava/lang/Object;
+    set(Ljava/lang/Object;)V
+== Lcom/appo/backgroundservice/ContentObserverService$SettingsObserver$showALLMDialog$2; 
+    onClick(Landroid/content/DialogInterface; I)V
+== Lcom/appo/backgroundservice/ContentObserverService$SettingsObserver$showALLMDialog$3; 
+    onClick(Landroid/content/DialogInterface; I)V
+== Lcom/appo/backgroundservice/ContentObserverService$SettingsObserver; extends Landroid/database/ContentObserver;
+    dismissALLMDialog()V
+    getHomeKeyReceiver()Lcom/appo/backgroundservice/receiver/HomeKeyReceiver;
+    onChange(Z Landroid/net/Uri;)V
+    showALLMDialog()V
+== Lcom/appo/backgroundservice/ContentObserverService$mDeviceManager$2; extends Lkotlin/jvm/internal/Lambda;
+    invoke()Lcom/appo/tv/DeviceManager;
+    invoke()Ljava/lang/Object;
+== Lcom/appo/backgroundservice/ContentObserverService$observer$2; extends Lkotlin/jvm/internal/Lambda;
+    invoke()Lcom/appo/backgroundservice/ContentObserverService$SettingsObserver;
+    invoke()Ljava/lang/Object;
+== Lcom/appo/backgroundservice/ContentObserverService; extends Landroid/app/Service;
+    getContentResolver()Landroid/content/ContentResolver;
+    getMDeviceManager()Lcom/appo/tv/DeviceManager;
+    getMainLooper()Landroid/os/Looper;
+    getObserver()Lcom/appo/backgroundservice/ContentObserverService$SettingsObserver;
+    getString(I)Ljava/lang/String;
+    onBind(Landroid/content/Intent;)Landroid/os/IBinder;
+    onCreate()V
+    onDestroy()V
+    sendBroadcast(Landroid/content/Intent;)V
+== Lcom/appo/backgroundservice/CustomParamService$1; extends Lcom/appo/backgroundservice/aidl/IWB11Service$Stub;
+    isChanging()Z
+    registerChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+    reset(Z)V
+    unregisterChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+== Lcom/appo/backgroundservice/CustomParamService; extends Landroid/app/Service;
+    getContentResolver()Landroid/content/ContentResolver;
+    getProcessedColorTemp(I I Z)I
+    getSaveKey(Ljava/lang/String; Z Z I I)Ljava/lang/String;
+    getSavedValue(Ljava/lang/String; Z Z I I I)I
+    getValue(Ljava/lang/String; I)I
+    isMtkConfig(Ljava/lang/String;)Z
+    notifyResetFinished()V
+    onBind(Landroid/content/Intent;)Landroid/os/IBinder;
+    onCreate()V
+    onStartCommand(Landroid/content/Intent; I I)I
+    processCustomParam(Z Z I I Z)V
+    setChanging(Z)V
+    setSavedValue(Ljava/lang/String; Z Z I I I)V
+    setValue(Ljava/lang/String; I)V
+== Lcom/appo/backgroundservice/FocusAdjustService$1; 
+    dismissDialog()V
+    prjSetManualFocus(I)V
+== Lcom/appo/backgroundservice/FocusAdjustService$IncomingHandler; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+== Lcom/appo/backgroundservice/FocusAdjustService; extends Landroid/app/Service;
+    dismissFocusDialog()V
+    getSystemService(Ljava/lang/String;)Ljava/lang/Object;
+    onBind(Landroid/content/Intent;)Landroid/os/IBinder;
+    onCreate()V
+    showFocusDialog(Z)V
+== Lcom/appo/backgroundservice/FocusAdjustView$1; 
+    onClick(Landroid/view/View;)V
+== Lcom/appo/backgroundservice/FocusAdjustView$prjFocusListener; 
+    dismissDialog()V
+    prjSetManualFocus(I)V
+== Lcom/appo/backgroundservice/FocusAdjustView; extends Landroid/widget/FrameLayout;
+    dispatchKeyEvent(Landroid/view/KeyEvent;)Z
+    setPrjFocusListener(Lcom/appo/backgroundservice/FocusAdjustView$prjFocusListener;)V
+== Lcom/appo/backgroundservice/MyActivity; extends Landroid/app/Activity;
+    onCreate(Landroid/os/Bundle;)V
+== Lcom/appo/backgroundservice/ShutdownService; extends Landroid/app/Service;
+    getString(I)Ljava/lang/String;
+    onBind(Landroid/content/Intent;)Landroid/os/IBinder;
+    onStartCommand(Landroid/content/Intent; I I)I
+== Lcom/appo/backgroundservice/UdiskUpgradeService$1; 
+    run()V
+== Lcom/appo/backgroundservice/UdiskUpgradeService$MyProgressListener; 
+    onCopyFailed(I Ljava/lang/Object;)V
+    onCopyProgress(I)V
+    onProgress(I)V
+    onStopProgress(I)V
+    onVerifyFailed(I Ljava/lang/Object;)V
+== Lcom/appo/backgroundservice/UdiskUpgradeService; extends Lcom/appo/backgroundservice/BaseService;
+    handleMessage(Landroid/os/Message;)V
+    onCreate()V
+    startUdiskUpgrade()V
+== Lcom/appo/backgroundservice/WB11ProcessorService$1; extends Lcom/appo/backgroundservice/aidl/IWB11Service$Stub;
+    isChanging()Z
+    registerChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+    reset(Z)V
+    unregisterChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+== Lcom/appo/backgroundservice/WB11ProcessorService$Format3DObserver; extends Landroid/database/ContentObserver;
+    onChange(Z)V
+== Lcom/appo/backgroundservice/WB11ProcessorService; extends Landroid/app/Service;
+    getContentResolver()Landroid/content/ContentResolver;
+    getSaveKey(Ljava/lang/String; I Z I)Ljava/lang/String;
+    getSavedValue(Ljava/lang/String; I Z I)I
+    getValue(Ljava/lang/String; I)I
+    isHDR(I)Z
+    isHDR10Plus(I)Z
+    notifyImageParamsChange(Z)V
+    notifyResetFinished()V
+    onBind(Landroid/content/Intent;)Landroid/os/IBinder;
+    onCreate()V
+    onDestroy()V
+    onStartCommand(Landroid/content/Intent; I I)I
+    processWhiteBalance11(Z Z Z)V
+    setChanging(Z)V
+    setSavedValue(Ljava/lang/String; I Z I I)V
+    setValue(Ljava/lang/String; I)V
+    startService(Landroid/content/Intent;)Landroid/content/ComponentName;
+    stopSelfResult(I)Z
+== Lcom/appo/backgroundservice/aidl/IWB11ChangeListener$Default; 
+    asBinder()Landroid/os/IBinder;
+    onChangeBegin()V
+    onChangeFinish()V
+== Lcom/appo/backgroundservice/aidl/IWB11ChangeListener$Stub$Proxy; 
+    asBinder()Landroid/os/IBinder;
+    getInterfaceDescriptor()Ljava/lang/String;
+    onChangeBegin()V
+    onChangeFinish()V
+== Lcom/appo/backgroundservice/aidl/IWB11ChangeListener$Stub; extends Landroid/os/Binder;
+    asBinder()Landroid/os/IBinder;
+    asInterface(Landroid/os/IBinder;)Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;
+    attachInterface(Landroid/os/IInterface; Ljava/lang/String;)V
+    getDefaultImpl()Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;
+    onChangeBegin()V
+    onChangeFinish()V
+    onTransact(I Landroid/os/Parcel; Landroid/os/Parcel; I)Z
+    setDefaultImpl(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)Z
+== Lcom/appo/backgroundservice/aidl/IWB11ChangeListener; 
+    asBinder()Landroid/os/IBinder;
+    onChangeBegin()V
+    onChangeFinish()V
+== Lcom/appo/backgroundservice/aidl/IWB11Service$Default; 
+    asBinder()Landroid/os/IBinder;
+    isChanging()Z
+    registerChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+    reset(Z)V
+    unregisterChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+== Lcom/appo/backgroundservice/aidl/IWB11Service$Stub$Proxy; 
+    asBinder()Landroid/os/IBinder;
+    getInterfaceDescriptor()Ljava/lang/String;
+    isChanging()Z
+    registerChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+    reset(Z)V
+    unregisterChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+== Lcom/appo/backgroundservice/aidl/IWB11Service$Stub; extends Landroid/os/Binder;
+    asBinder()Landroid/os/IBinder;
+    asInterface(Landroid/os/IBinder;)Lcom/appo/backgroundservice/aidl/IWB11Service;
+    attachInterface(Landroid/os/IInterface; Ljava/lang/String;)V
+    getDefaultImpl()Lcom/appo/backgroundservice/aidl/IWB11Service;
+    isChanging()Z
+    onTransact(I Landroid/os/Parcel; Landroid/os/Parcel; I)Z
+    registerChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+    reset(Z)V
+    setDefaultImpl(Lcom/appo/backgroundservice/aidl/IWB11Service;)Z
+    unregisterChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+== Lcom/appo/backgroundservice/aidl/IWB11Service; 
+    isChanging()Z
+    registerChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+    reset(Z)V
+    unregisterChangeListener(Lcom/appo/backgroundservice/aidl/IWB11ChangeListener;)V
+== Lcom/appo/backgroundservice/constant/Constant$Fan; 
+    field FAN_DMD_PERSIST_NAME
+    field FAN_LASER1_PERSIST_NAME
+    field FAN_LASER2_PERSIST_NAME
+    field FAN_LASER3_PERSIST_NAME
+    field FAN_POWER_PERSIST_NAME
+== Lcom/appo/backgroundservice/constant/Constant$Model; 
+    field AL_DFQ730
+    field AL_DFQ750
+    field AL_MH700
+== Lcom/appo/backgroundservice/constant/Constant; 
+    field PROP_FAN_SPEED_LEVEL
+    field RO_PRODUCT_MODEL
+== Lcom/appo/backgroundservice/receiver/BootReceiver; extends Landroid/content/BroadcastReceiver;
+    ensureDolbyUserValid()V
+    initWB11(Landroid/content/Context;)V
+    isTPrimariesStrValid(Ljava/lang/String;)Z
+    onReceive(Landroid/content/Context; Landroid/content/Intent;)V
+== Lcom/appo/backgroundservice/receiver/HomeKeyReceiver; extends Landroid/content/BroadcastReceiver;
+    getOnReceive()Lkotlin/jvm/functions/Function0;
+    onReceive(Landroid/content/Context; Landroid/content/Intent;)V
+    register(Landroid/content/Context;)V
+    unregister(Landroid/content/Context;)V
+== Lcom/appo/backgroundservice/shutdownPage/Behavior; 
+    getBackgroundResource()I
+    getTitle()Ljava/lang/String;
+    getType()I
+    operate()V
+    setBackgroundResource(I)Lcom/appo/backgroundservice/shutdownPage/Behavior;
+    setTitle(Ljava/lang/String;)Lcom/appo/backgroundservice/shutdownPage/Behavior;
+    setType(I)Lcom/appo/backgroundservice/shutdownPage/Behavior;
+== Lcom/appo/backgroundservice/shutdownPage/CircleProgressbar$1; 
+    onAnimationUpdate(Landroid/animation/ValueAnimator;)V
+== Lcom/appo/backgroundservice/shutdownPage/CircleProgressbar; extends Landroid/view/View;
+    getMeasuredHeight()I
+    getMeasuredWidth()I
+    initData()V
+    invalidate()V
+    onDraw(Landroid/graphics/Canvas;)V
+    onMeasure(I I)V
+    setBackgroundResource(I)V
+    setFocus(Z)V
+    setMeasuredDimension(I I)V
+    setText(Landroid/widget/TextView; Ljava/lang/String;)V
+    setValue(I Landroid/widget/TextView; Z)V
+    startAnimator(I I J Landroid/widget/TextView;)V
+== Lcom/appo/backgroundservice/shutdownPage/Client; 
+    getBehaviors(Landroid/content/Context;)Ljava/util/List;
+== Lcom/appo/backgroundservice/shutdownPage/PowerDownView$1; 
+    onFocusChange(Landroid/view/View; Z)V
+== Lcom/appo/backgroundservice/shutdownPage/PowerDownView; extends Landroid/widget/LinearLayout;
+    findViewById(I)Landroid/view/View;
+    initView()V
+    onKeyUp(I Landroid/view/KeyEvent;)Z
+    setBackgroundResource(I)V
+    setBehavior(Lcom/appo/backgroundservice/shutdownPage/Behavior;)V
+    setClickable(Z)V
+    setEnabled(Z)V
+    setFocusable(Z)V
+    setFocusableInTouchMode(Z)V
+    setLayoutParams(Landroid/view/ViewGroup$LayoutParams;)V
+    setOnClickListener(Landroid/view/View$OnClickListener;)V
+    setOnFocusChangeListener(Landroid/view/View$OnFocusChangeListener;)V
+    setOnHoverListener(Landroid/view/View$OnHoverListener;)V
+    setText(Ljava/lang/String;)V
+== Lcom/appo/backgroundservice/shutdownPage/RebootBehavior; extends Lcom/appo/backgroundservice/shutdownPage/Behavior;
+    operate()V
+    setBackgroundResource(I)Lcom/appo/backgroundservice/shutdownPage/Behavior;
+== Lcom/appo/backgroundservice/shutdownPage/ScreenOffBehavior; extends Lcom/appo/backgroundservice/shutdownPage/Behavior;
+    operate()V
+    setBackgroundResource(I)Lcom/appo/backgroundservice/shutdownPage/Behavior;
+== Lcom/appo/backgroundservice/shutdownPage/ShutdownBehavior; extends Lcom/appo/backgroundservice/shutdownPage/Behavior;
+    operate()V
+    setBackgroundResource(I)Lcom/appo/backgroundservice/shutdownPage/Behavior;
+== Lcom/appo/backgroundservice/shutdownPage/ShutdownPageService$1; 
+    onDismiss(Landroid/content/DialogInterface;)V
+== Lcom/appo/backgroundservice/shutdownPage/ShutdownPageService$ShutdownPageReceiver; extends Landroid/content/BroadcastReceiver;
+    onReceive(Landroid/content/Context; Landroid/content/Intent;)V
+== Lcom/appo/backgroundservice/shutdownPage/ShutdownPageService; extends Lcom/appo/backgroundservice/BaseService;
+    dismissDialog()V
+    handleMessage(Landroid/os/Message;)V
+    initView()V
+    isIn3DMode()Z
+    onConfigurationChanged(Landroid/content/res/Configuration;)V
+    onCreate()V
+    onDestroy()V
+    onStartCommand(Landroid/content/Intent; I I)I
+    registerBroadcast()V
+    showShutdonwPageDialog()V
+    unRegisterBroadcast()V
+== Lcom/appo/backgroundservice/shutdownPage/StandbyBehavior; extends Lcom/appo/backgroundservice/shutdownPage/Behavior;
+    down()V
+    operate()V
+    setType(I)Lcom/appo/backgroundservice/shutdownPage/Behavior;
+    up()V
+== Lcom/appo/backgroundservice/shutdownPage/StandbyTimeController$1; 
+    onKeyDown(I Landroid/view/KeyEvent;)Z
+== Lcom/appo/backgroundservice/shutdownPage/StandbyTimeController$2; extends Ljava/util/TimerTask;
+    run()V
+== Lcom/appo/backgroundservice/shutdownPage/StandbyTimeController$3; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+== Lcom/appo/backgroundservice/shutdownPage/StandbyTimeController; 
+    addNewTime(I)V
+    changeArrowState(I)V
+    hasAddNewTime()Z
+    initDefaultTimes()V
+    initInitialTime()V
+    initListener()V
+    removeNewTime()V
+    resetToDefaultState()V
+    startCountDown()V
+    stopCountDown()V
+== Lcom/appo/backgroundservice/shutdownPage/StandbyTimeSeletor$1; 
+    onFocusChange(Landroid/view/View; Z)V
+== Lcom/appo/backgroundservice/shutdownPage/StandbyTimeSeletor$onKeyDownListener; 
+    onKeyDown(I Landroid/view/KeyEvent;)Z
+== Lcom/appo/backgroundservice/shutdownPage/StandbyTimeSeletor; extends Landroid/widget/RelativeLayout;
+    findViewById(I)Landroid/view/View;
+    getArrowDown()Landroid/widget/ImageView;
+    getArrowUp()Landroid/widget/ImageView;
+    hasFocus()Z
+    onKeyDown(I Landroid/view/KeyEvent;)Z
+    setBehavior(Lcom/appo/backgroundservice/shutdownPage/Behavior;)V
+    setFocusStateView(I)V
+    setFocusable(Z)V
+    setFocusableInTouchMode(Z)V
+    setLayoutParams(Landroid/view/ViewGroup$LayoutParams;)V
+    setOnClickListener(Landroid/view/View$OnClickListener;)V
+    setOnFocusChangeListener(Landroid/view/View$OnFocusChangeListener;)V
+    setOnHoverListener(Landroid/view/View$OnHoverListener;)V
+    setOnKeyDownListener(Lcom/appo/backgroundservice/shutdownPage/StandbyTimeSeletor$onKeyDownListener;)V
+    setText(Ljava/lang/String;)V
+    setTime(I)V
+== Lcom/appo/backgroundservice/shutdownPage/Switcher; 
+    down()V
+    up()V
+== Lcom/appo/backgroundservice/shutdownPage/ViewOperator; 
+    setBehavior(Lcom/appo/backgroundservice/shutdownPage/Behavior;)V
+== Lcom/appo/backgroundservice/shutdownPage/ZebaoClient; extends Lcom/appo/backgroundservice/shutdownPage/Client;
+    getBehaviors(Landroid/content/Context;)Ljava/util/List;
+== Lcom/appo/backgroundservice/sleepmode/SleepmodeService$IncomingHandler; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+== Lcom/appo/backgroundservice/sleepmode/SleepmodeService$SleepModeReceiver; extends Landroid/content/BroadcastReceiver;
+    onReceive(Landroid/content/Context; Landroid/content/Intent;)V
+== Lcom/appo/backgroundservice/sleepmode/SleepmodeService; extends Landroid/app/Service;
+    getApplicationContext()Landroid/content/Context;
+    onBind(Landroid/content/Intent;)Landroid/os/IBinder;
+    onDestroy()V
+    onStartCommand(Landroid/content/Intent; I I)I
+    startService(Landroid/content/Intent;)Landroid/content/ComponentName;
+    startSleepModeTask()V
+== Lcom/appo/backgroundservice/sleepmode/controller/IResult; 
+    onComplete()V
+    onTimeTick(I)V
+== Lcom/appo/backgroundservice/sleepmode/controller/ISleepBehavior; 
+    startSleep(Landroid/content/Context;)V
+== Lcom/appo/backgroundservice/sleepmode/controller/ITimerBehavior; 
+    setResultCallback(Lcom/appo/backgroundservice/sleepmode/controller/IResult;)V
+    startTimer(I)V
+    stopTimer()V
+== Lcom/appo/backgroundservice/sleepmode/controller/impl/SleepBehavior$1; 
+    onTimeFinished()V
+== Lcom/appo/backgroundservice/sleepmode/controller/impl/SleepBehavior$2; 
+    onClick(Landroid/content/DialogInterface; I)V
+== Lcom/appo/backgroundservice/sleepmode/controller/impl/SleepBehavior; 
+    getSleepMode()I
+    getSleepTime()I
+    isNeedStayawake()Z
+    isSleepModeOn()Z
+    onComplete()V
+    onTimeTick(I)V
+    startSleep(Landroid/content/Context;)V
+== Lcom/appo/backgroundservice/sleepmode/controller/impl/TimerBehavior$1; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+== Lcom/appo/backgroundservice/sleepmode/controller/impl/TimerBehavior; 
+    setResultCallback(Lcom/appo/backgroundservice/sleepmode/controller/IResult;)V
+    startTimer(I)V
+    stopTimer()V
+== Lcom/appo/backgroundservice/tempdetect/strategy/ShutdownStrategy; extends Lcom/appo/backgroundservice/tempdetect/strategy/TempDetectBaseStrategy;
+    onDialogDismiss()V
+== Lcom/appo/backgroundservice/tempdetect/strategy/TempDetectBaseStrategy$1; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+== Lcom/appo/backgroundservice/tempdetect/strategy/TempDetectBaseStrategy; 
+    getDialogShowStatus()Z
+    onDialogDismiss()V
+    setUIUpdate(Ljava/lang/String;)V
+== Lcom/appo/backgroundservice/utils/FileManager$1; 
+    accept(Ljava/io/File; Ljava/lang/String;)Z
+== Lcom/appo/backgroundservice/utils/FileManager; 
+    getFilePath(Ljava/lang/String;)Ljava/lang/String;
+    getTime()Ljava/lang/String;
+    isFileExist(Ljava/lang/String;)Z
+    readJsonFile(Ljava/lang/String;)Ljava/lang/String;
+    readJsonFileFromAssets(Landroid/content/Context; Ljava/lang/String;)Ljava/lang/String;
+    recordHotLogicMessageToLocal(Ljava/lang/String;)V
+    writeJsonFile(Ljava/lang/String; Ljava/lang/String;)Ljava/lang/String;
+== Lcom/appo/backgroundservice/utils/PrefUtils; 
+    clearData()V
+    copyBKFile()V
+    copyBackup(Z)V
+    copyFile(Ljava/lang/String; Ljava/lang/String;)V
+    createAmlScript(Ljava/lang/String; Z Z)I
+    getAttribute(Ljava/lang/String;)Ljava/lang/String;
+    getAttributeonN(Ljava/lang/String;)Ljava/lang/String;
+    getAutoCheck()Z
+    getBooleanVal(Ljava/lang/String; Z)Z
+    getCanWritePath()Ljava/lang/String;
+    getDescri()Ljava/lang/String;
+    getDiskInfo(Ljava/lang/String;)Ljava/lang/Object;
+    getDownFileSet()Ljava/util/Set;
+    getExternalStorageListOnN()Ljava/util/ArrayList;
+    getFileSize()J
+    getMainDeviceListonN()Ljava/util/ArrayList;
+    getNickName(Ljava/lang/String;)Ljava/lang/String;
+    getProperties(Ljava/lang/String; Ljava/lang/String;)Ljava/lang/Object;
+    getScriptAsk()Z
+    getStorageList(Z)Ljava/util/ArrayList;
+    getTransPath(Ljava/lang/String;)Ljava/lang/String;
+    getUpdatePath()Ljava/lang/String;
+    inLocal(Ljava/lang/String;)Z
+    isUserVer()Z
+    onExternalPathSwitch(Ljava/lang/String;)Ljava/lang/String;
+    saveFileSize(J)V
+    setBoolean(Ljava/lang/String; Ljava/lang/Boolean;)V
+    setDescrib(Ljava/lang/String;)V
+    setDownFileList(Ljava/util/Set;)V
+    setInt(Ljava/lang/String; I)V
+    setLong(Ljava/lang/String; J)V
+    setScriptAsk(Z)V
+    setString(Ljava/lang/String; Ljava/lang/String;)V
+    setStringSet(Ljava/lang/String; Ljava/util/Set;)V
+    setUpdatePath(Ljava/lang/String;)V
+    write2File()V
+== Lcom/appo/backgroundservice/utils/ScreenAdapterUtils; 
+    adapterViewByMinScale(Landroid/view/View;)Landroid/view/View;
+    adapterViewByWidth(I)Landroid/view/View;
+    adapterViewByWidth(Landroid/view/View;)Landroid/view/View;
+    getInstance(Landroid/content/Context; I I)Lcom/appo/backgroundservice/utils/ScreenAdapterUtils;
+== Lcom/appo/backgroundservice/utils/SharedPreferencesUtils; 
+    getParam(Landroid/content/Context; Ljava/lang/String; Ljava/lang/Object;)Ljava/lang/Object;
+    setParam(Landroid/content/Context; Ljava/lang/String; Ljava/lang/Object;)V
+== Lcom/appo/backgroundservice/utils/TimerUtils$1; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+== Lcom/appo/backgroundservice/utils/TimerUtils$countdownListener; 
+    onComplete()V
+    onShowDialog(I)V
+== Lcom/appo/backgroundservice/utils/TimerUtils; 
+    cancelTimer(Lcom/appo/backgroundservice/utils/TimerUtils$countdownListener;)V
+    destroyTimer(Lcom/appo/backgroundservice/utils/TimerUtils$countdownListener;)V
+    startCountDown(I Lcom/appo/backgroundservice/utils/TimerUtils$countdownListener;)V
+== Lcom/appo/backgroundservice/utils/Utils$1; extends Landroid/os/Handler;
+    handleMessage(Landroid/os/Message;)V
+== Lcom/appo/backgroundservice/utils/Utils$2; extends Ljava/lang/Thread;
+    run()V
+    start()V
+== Lcom/appo/backgroundservice/utils/Utils; 
+    callCommand(Ljava/lang/String;)Ljava/lang/String;
+    getCurrent3DMode()I
+    initDeviceName(Landroid/content/Context;)V
+    isFactoryMode()Z
+    isHomeVersion()Z
+    isServiceRunning(Landroid/content/Context; Ljava/lang/String;)Z
+    isTricolor()Z
+    resetTimeout(Lcom/appo/backgroundservice/FocusAdjustView$prjFocusListener;)V
+    simulateKey(I)V
+== Lcom/appo/backgroundservice/view/CustomDialog$Builder$1; 
+    onClick(Landroid/view/View;)V
+== Lcom/appo/backgroundservice/view/CustomDialog$Builder$2; 
+    onClick(Landroid/view/View;)V
+== Lcom/appo/backgroundservice/view/CustomDialog$Builder; 
+    createComfirmDialog()Lcom/appo/backgroundservice/view/CustomDialog;
+    dissmiss()V
+    getEditText()Landroid/widget/EditText;
+    getNegativeButton()Landroid/widget/Button;
+    getPassword()Ljava/lang/String;
+    getPositiveButton()Landroid/widget/Button;
+    getProgressBar()Landroid/widget/ProgressBar;
+    getTitleView()Landroid/widget/TextView;
+    refreshConfirmDialogContent(Ljava/lang/String;)V
+    refreshNegativeButtonContent(Ljava/lang/String;)V
+    refreshPositiveButtonContent(Ljava/lang/String;)V
+    setConfirmDialogType(I)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setContentView(Landroid/view/View;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setDescription(Ljava/lang/String;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setEditFinishListener(Landroid/content/DialogInterface$OnClickListener;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setEditTextMaxLenght(I)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setMessage(I)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setMessage(Ljava/lang/String;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setNegativeButton(I Landroid/content/DialogInterface$OnClickListener;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setNegativeButton(Ljava/lang/String; Landroid/content/DialogInterface$OnClickListener;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setPassword(I)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setPassword(Ljava/lang/String;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setPositiveButton(I Landroid/content/DialogInterface$OnClickListener;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setPositiveButton(Ljava/lang/String; Landroid/content/DialogInterface$OnClickListener;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setStateDialogImage(I)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setStateDialogText(Ljava/lang/String;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setTitle(I)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setTitle(Ljava/lang/String;)Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    setType(I)V
+== Lcom/appo/backgroundservice/view/CustomDialog; extends Landroid/app/Dialog;
+    dismiss()V
+    getBuilder()Lcom/appo/backgroundservice/view/CustomDialog$Builder;
+    getWindow()Landroid/view/Window;
+    isShowing()Z
+    setCancelable(Z)V
+    setContentView(Landroid/view/View;)V
+    setDialogSize(I I)V
+    setOnDismissListener(Landroid/content/DialogInterface$OnDismissListener;)V
+    show()V
+== Lcom/appo/backgroundservice/volume/CircleProgressBar; extends Landroid/view/View;
+    addProcess()V
+    initView()V
+    onDraw(Landroid/graphics/Canvas;)V
+    postInvalidate()V
+    setProcess(I)V
+    subProcess()V
+    sweepGradientInit()V
+== Lcom/appo/backgroundservice/volume/VerticalVolumeBar; extends Landroid/view/View;
+    getHeight()I
+    getProgress()I
+    getWidth()I
+    invalidate()V
+    onDraw(Landroid/graphics/Canvas;)V
+    onMeasure(I I)V
+    setProgress(I)V
+== Lcom/appo/backgroundservice/volume/VolumeChangeService$handler$2; extends Lkotlin/jvm/internal/Lambda;
+    invoke()Landroid/os/Handler;
+    invoke()Ljava/lang/Object;
+== Lcom/appo/backgroundservice/volume/VolumeChangeService$onStartCommand$1; extends Lkotlin/jvm/internal/MutablePropertyReference0Impl;
+    get()Ljava/lang/Object;
+    set(Ljava/lang/Object;)V
+== Lcom/appo/backgroundservice/volume/VolumeChangeService$onStartCommand$3; 
+    run()V
+== Lcom/appo/backgroundservice/volume/VolumeChangeService; extends Landroid/app/Service;
+    getHandler()Landroid/os/Handler;
+    getMainLooper()Landroid/os/Looper;
+    getSystemService(Ljava/lang/String;)Ljava/lang/Object;
+    onBind(Landroid/content/Intent;)Landroid/os/IBinder;
+    onStartCommand(Landroid/content/Intent; I I)I
+== Lcom/appo/backgroundservice/volume/VolumeDialog; extends Landroid/app/Dialog;
+    dismiss()V
+    getContext()Landroid/content/Context;
+    getVolume()I
+    getWindow()Landroid/view/Window;
+    onCreate(Landroid/os/Bundle;)V
+    setContentView(Landroid/view/View;)V
+    setVolume(I)V
+    show()V
+== Lcom/appo/internal/DeviceManagerDefaultImpl; 
+    copyFile(Ljava/lang/String; Ljava/lang/String; Z)I
+    get3dTo2dMode(Landroid/content/Context;)I
+    getAudioMode(Landroid/content/Context;)I
+    getBootSource(Landroid/content/Context;)I
+    getColorTempMode(Landroid/content/Context;)I
+    getConfigDefaultValue(Ljava/lang/String; I I)I
+    getConfigDefaultValue(Ljava/lang/String; I)[I
+    getCurrentInputSourceId(Landroid/content/Context;)I
+    getDNRLevel(Landroid/content/Context;)I
+    getDialogueEnhancerLevel(Landroid/content/Context;)I
+    getDigitalOutput(Landroid/content/Context;)I
+    getDlpManager()Lcom/appo/tv/DlpManager;
+    getDolbyVisionScreenGain()I
+    getDolbyVisionScreenSize()I
+    getDynamicHdrMode()I
+    getEDIDVersion(Landroid/content/Context;)I
+    getEmmcEnvVar(Ljava/lang/String;)Ljava/lang/String;
+    getEotfGamma(Landroid/content/Context;)I
+    getFanDutyCycle(I)I
+    getFanSpeed(I)I
+    getFotaArea()Ljava/lang/String;
+    getFotaLanguage()Ljava/lang/String;
+    getHdmiColorDepth()I
+    getHdmiInfo(Ljava/lang/String;)Ljava/lang/String;
+    getHdmiResolution()Ljava/lang/String;
+    getHdrAvgFALL()I
+    getHdrMaxCLL()I
+    getHdrMode(Landroid/content/Context;)I
+    getHdrType()I
+    getIniParameter(Ljava/lang/String; Ljava/lang/String;)Ljava/lang/String;
+    getLineInState(Landroid/content/Context;)I
+    getMaxLuminance()I
+    getMemcLevel(Landroid/content/Context;)I
+    getMinLuminance()I
+    getNoSignalPowerOffTime(Landroid/content/Context;)I
+    getOsdMappingValue(Ljava/lang/String; I)[I
+    getPqMode(Landroid/content/Context;)I
+    getPqParamValue(Landroid/content/Context; I)I
+    getProjectorManager()Lcom/appotronics/support/ProjectorManager;
+    getRgbGainOffset(I I I Ljava/lang/String;)[I
+    getRgbGainOffset(I)[I
+    getRgbGainOffsetByPercent(I)[I
+    getRgbRangeMode(Landroid/content/Context;)I
+    getSalesArea()Ljava/lang/String;
+    getScreenMode(Landroid/content/Context;)I
+    getScreenResolution()Ljava/lang/String;
+    getScreenType()I
+    getSoundEqualizer(Landroid/content/Context; I)I
+    getSoundMode(Landroid/content/Context;)I
+    getTopActivity(Landroid/content/Context;)Ljava/lang/String;
+    getUsbSel0Ctrl()I
+    invokeEvent(I I I I)I
+    isAudioLrSwitch()Z
+    isAutoEarcEnable(Landroid/content/Context;)Z
+    isBodyDetectEnabled()Z
+    isCecEnabled(Landroid/content/Context;)Z
+    isDolbyAtmosEnabled(Landroid/content/Context;)Z
+    isDolbyAudioEnabled(Landroid/content/Context;)Z
+    isDolbyVision()Z
+    isEarcEnable()Z
+    isHDR(Landroid/content/Context;)Z
+    isLedEnabled()Z
+    isPowerOnEnabled()Z
+    isPowerOnRingtoneEnabled()Z
+    isPqEventFinished()Z
+    isSignalLoss(Landroid/content/Context;)Z
+    isSoundSurroundEnabled(Landroid/content/Context;)Z
+    isUartEnabled()Z
+    isVRREnabled()Z
+    parseResolution(Ljava/lang/String;)[I
+    processD65Temp(Landroid/content/Context; I Z)V
+    readUnifyKey(Ljava/lang/String;)Ljava/lang/String;
+    resetImageParameter(Landroid/content/Context; I)V
+    resetPictureToDefault(Landroid/content/Context; I)V
+    resetPictureToDefault(Landroid/content/Context;)V
+    restoreHdrGamma()V
+    set3dTo2dMode(Landroid/content/Context; I)I
+    setAppoLeds(I I)V
+    setAudioLrSwitch(Z)I
+    setAudioMode(Landroid/content/Context; I)V
+    setAutoEarcEnable(Landroid/content/Context; Z)V
+    setBodyDetectEnabled(Z)I
+    setBootArgs(Ljava/lang/String; Ljava/lang/String;)V
+    setBootSource(Landroid/content/Context; I)V
+    setCecEnabled(Landroid/content/Context; Z)V
+    setColorTempMode(Landroid/content/Context; I)V
+    setDNRLevel(Landroid/content/Context; I)V
+    setDialogueEnhancerLevel(Landroid/content/Context; I)V
+    setDigitalOutput(Landroid/content/Context; I)V
+    setDlpLedForNetCtrl(Landroid/content/Context; I)V
+    setDolbyAtmosEnabled(Landroid/content/Context; Z)V
+    setDolbyAudioEnabled(Landroid/content/Context; Z)V
+    setDolbyVisionScreenGain(I)I
+    setDolbyVisionScreenSize(I)I
+    setDynamicHdrLevel(I)Z
+    setDynamicHdrMode(I)Z
+    setEDIDVersion(Landroid/content/Context; I)V
+    setEarcEnable(Z)V
+    setEmmcEnvVar(Ljava/lang/String; Ljava/lang/String;)V
+    setEotfGamma(Landroid/content/Context; I)V
+    setFanDutyCycle(I I)I
+    setFocusMotor(I)I
+    setHdcpKey(I Ljava/lang/String;)I
+    setHdcpKey(I [B)I
+    setHdrGamma(Landroid/content/Context;)V
+    setHdrMode(Landroid/content/Context; I)V
+    setIniParameter(Ljava/lang/String; Ljava/lang/String; Ljava/lang/String;)I
+    setLedEnabled(Z)V
+    setLineInEnable(Landroid/content/Context; I)V
+    setMemcLevel(Landroid/content/Context; I)V
+    setMtkTestPattern(I)V
+    setNoSignalPowerOff(Landroid/content/Context; I)V
+    setPowerOnEnabled(Z)V
+    setPowerOnRingtoneEnabled(Z)V
+    setPqBypass(Landroid/content/Context;)V
+    setPqMode(Landroid/content/Context; I)V
+    setPqParamValue(Landroid/content/Context; I I)V
+    setRgbGainOffset(I I I [I Ljava/lang/String;)I
+    setRgbGainOffset(I I)V
+    setRgbGainOffsetByPercent(I I)V
+    setRgbRangeMode(Landroid/content/Context; I)V
+    setScreenMode(Landroid/content/Context; I)V
+    setScreenType(I)V
+    setSoundEqualizer(Landroid/content/Context; I I)V
+    setSoundMode(Landroid/content/Context; I I)V
+    setSoundMode(Landroid/content/Context; I)V
+    setSoundSurroundEnabled(Landroid/content/Context; Z)V
+    setUartEnabled(Z)V
+    setUsbSel0Ctrl(I)I
+    setVRREnabled(Z)I
+    shutdown(Landroid/content/Context;)V
+    switchSource(Landroid/content/Context; I)V
+    syncDrvParameterToUserSetting(Ljava/lang/String; I)I
+    toPercent(I)I
+    writeUnifyKey(Ljava/lang/String; Ljava/lang/String;)I
+== Lcom/appo/internal/DlpManagerDefaultImpl; 
+    formatDlpVersion(Ljava/lang/String;)Ljava/lang/String;
+    get24PMode()I
+    get3dMode(Landroid/content/Context;)I
+    get3dSyncInvertStatus()Z
+    getBrightness()I
+    getColorWheelDelay()I
+    getColorWheelSpeed()I
+    getCurGamma()I
+    getCurrent()Ljava/util/List;
+    getDBMode()I
+    getDlpBrightnessMode(Landroid/content/Context;)I
+    getEeprom(Ljava/lang/String;)Ljava/lang/String;
+    getGamma(I)Ljava/lang/String;
+    getHsg(I)Ljava/util/ArrayList;
+    getInstallationMode()I
+    getKeystoneData()Ljava/util/ArrayList;
+    getLightSourceTime()J
+    getProjectorManager()Lcom/appotronics/support/ProjectorManager;
+    getSavedWarpData(I I)Ljava/util/ArrayList;
+    getSegmentCurrent()Ljava/util/List;
+    getSystemDefaultDlpBrightnessMode()I
+    getTemperature()Landroid/util/SparseIntArray;
+    getVersion(I)Ljava/lang/String;
+    getZoomScale()F
+    initTricolorCurrent([I I I I)V
+    isBrightnessModeSegmentEnabled()Z
+    isBrilliantColorEnabled()Z
+    isDBEnabled()Z
+    isHdrEnabled()Z
+    isLightSourceEnabled()Z
+    isLowLatencyEnabled()Z
+    isSpokeEnabled()Z
+    isWarpEnabled()Z
+    isXprEnabled()Z
+    prjSetAutoKeystoneEnable(Landroid/content/Context; I)I
+    resetGamma(I)I
+    resetHsg(I)I
+    resetPlatformData()I
+    saveWarpData(I I Ljava/util/ArrayList;)I
+    set24PMode(I)I
+    set3dMode(Landroid/content/Context; I I)I
+    set3dSyncInvert(Z)I
+    setBrightness(I)I
+    setBrightnessModeSegmentEnabled(Landroid/content/Context; Z)V
+    setBrilliantColorEnabled(Z)I
+    setColorWheelDelay(I)I
+    setControlPointsLayout(I I)I
+    setCurGamma(I)I
+    setCurrent(I I I)I
+    setDBEnabled(Z)I
+    setDBMode(I)I
+    setDlpBrightnessMode(Landroid/content/Context; I)V
+    setEeprom(Ljava/lang/String; Ljava/lang/String;)I
+    setGamma(I I)I
+    setHdrEnabled(Z)I
+    setHsg(I Ljava/util/ArrayList;)I
+    setInstallationMode(I)I
+    setKeystoneData(Ljava/util/ArrayList;)I
+    setLightSourceEnabled(Z)I
+    setLightSourceTime(J)I
+    setLowLatencyEnabled(Z)I
+    setPassThroughEnabled(Z)I
+    setSegmentCurrent(I I I I)I
+    setShiftDelta(I I)I
+    setSmoothWarpData(Ljava/util/ArrayList;)I
+    setSpokeEnabled(Z)I
+    setTestPattern(Ljava/lang/String;)I
+    setWarpData(Ljava/util/ArrayList;)I
+    setWarpEnabled(Z)I
+    setWarpPoint(I I I I)I
+    setXprEnabled(Z)I
+    setZoomScale(F)I
+== Lcom/appo/internal/ManagerLogProxy$MyInvocationHandler; 
+    invoke(Ljava/lang/Object; Ljava/lang/reflect/Method; [Ljava/lang/Object;)Ljava/lang/Object;
+== Lcom/appo/internal/ManagerLogProxy; 
+    getProxy(Ljava/lang/Object;)Ljava/lang/Object;
+== Lcom/appo/internal/PolicyBase; 
+    makeTvContext()Lcom/appo/tv/TvContext;
+== Lcom/appo/internal/PolicyFactory; 
+    getPolicy()Lcom/appo/internal/PolicyBase;
+== Lcom/appo/internal/TvContextDefaultImpl$1; extends Lcom/appo/tv/TvContext$ServiceFetcher;
+    createService(Lcom/appo/tv/TvContext;)Ljava/lang/Object;
+== Lcom/appo/internal/TvContextDefaultImpl$2; extends Lcom/appo/tv/TvContext$ServiceFetcher;
+    getService(Lcom/appo/tv/TvContext;)Ljava/lang/Object;
+== Lcom/appo/internal/TvContextDefaultImpl; extends Lcom/appo/tv/TvContext;
+    getInstanceByClass(Ljava/lang/Class; Landroid/content/Context;)Ljava/lang/Object;
+    getInstanceByClass(Ljava/lang/Class;)Ljava/lang/Object;
+== Lcom/appo/tv/Constant$APPO_LED_MODE; extends Ljava/lang/Enum;
+    field $VALUES
+    field APPO_LED_MAX
+    field APPO_LED_RESET
+    field APPO_LED_STATUS
+    field APPO_LED_UPDATA
+    clone()Ljava/lang/Object;
+    valueOf(Ljava/lang/String;)Lcom/appo/tv/Constant$APPO_LED_MODE;
+    values()[Lcom/appo/tv/Constant$APPO_LED_MODE;
+== Lcom/appo/tv/Constant$APPO_LED_STATUS; extends Ljava/lang/Enum;
+    field $VALUES
+    field APPO_LEDST_BT
+    field APPO_LEDST_LOOP
+    field APPO_LEDST_OFF
+    field APPO_LEDST_PWOFF
+    field APPO_LEDST_PWON
+    field APPO_LEDST_STANDBY
+    field APPO_LEDST_UPDATA
+    clone()Ljava/lang/Object;
+    valueOf(Ljava/lang/String;)Lcom/appo/tv/Constant$APPO_LED_STATUS;
+    values()[Lcom/appo/tv/Constant$APPO_LED_STATUS;
+== Lcom/appo/tv/Constant$PERSIST; 
+    field AUTO_KEYSTONE_ENABLE
+    field DLP_BRIGHTNESS_MODE
+== Lcom/appo/tv/Constant; 
+    field DEVICE_A60C
+    field DEVICE_A61S
+    field DEVICE_AMLOGIC_PROJECT
+    field DEVICE_AMLOGIC_TV
+    field MAX_DELAY
+    field PRODUCTORMODEL
+    field UNKNOWN
+    isAmlogic_Projector()Z
+    isAmlogic_TV()Z
+    isAppoVersion()Z
+    isCommonCustomer()Z
+    isDJSCustomer()Z
+    isInternationVersion()Z
+    isRK3188_Projector()Z
+    isT866Paltform()Z
+    isT968Paltform()Z
+== Lcom/appo/tv/DeviceManager; 
+    copyFile(Ljava/lang/String; Ljava/lang/String; Z)I
+    get3dTo2dMode(Landroid/content/Context;)I
+    getAudioMode(Landroid/content/Context;)I
+    getBootSource(Landroid/content/Context;)I
+    getColorTempMode(Landroid/content/Context;)I
+    getConfigDefaultValue(Ljava/lang/String; I I)I
+    getConfigDefaultValue(Ljava/lang/String; I)[I
+    getCurrentInputSourceId(Landroid/content/Context;)I
+    getDNRLevel(Landroid/content/Context;)I
+    getDialogueEnhancerLevel(Landroid/content/Context;)I
+    getDigitalOutput(Landroid/content/Context;)I
+    getDolbyVisionScreenGain()I
+    getDolbyVisionScreenSize()I
+    getDynamicHdrMode()I
+    getEDIDVersion(Landroid/content/Context;)I
+    getEmmcEnvVar(Ljava/lang/String;)Ljava/lang/String;
+    getEotfGamma(Landroid/content/Context;)I
+    getFanDutyCycle(I)I
+    getFanSpeed(I)I
+    getFotaArea()Ljava/lang/String;
+    getFotaLanguage()Ljava/lang/String;
+    getHdmiColorDepth()I
+    getHdmiInfo(Ljava/lang/String;)Ljava/lang/String;
+    getHdmiResolution()Ljava/lang/String;
+    getHdrAvgFALL()I
+    getHdrMaxCLL()I
+    getHdrMode(Landroid/content/Context;)I
+    getHdrType()I
+    getLineInState(Landroid/content/Context;)I
+    getMaxLuminance()I
+    getMemcLevel(Landroid/content/Context;)I
+    getMinLuminance()I
+    getNoSignalPowerOffTime(Landroid/content/Context;)I
+    getOsdMappingValue(Ljava/lang/String; I)[I
+    getPqMode(Landroid/content/Context;)I
+    getPqParamValue(Landroid/content/Context; I)I
+    getRgbGainOffset(I I I Ljava/lang/String;)[I
+    getRgbGainOffset(I)[I
+    getRgbGainOffsetByPercent(I)[I
+    getRgbRangeMode(Landroid/content/Context;)I
+    getSalesArea()Ljava/lang/String;
+    getScreenMode(Landroid/content/Context;)I
+    getScreenResolution()Ljava/lang/String;
+    getScreenType()I
+    getSoundEqualizer(Landroid/content/Context; I)I
+    getSoundMode(Landroid/content/Context;)I
+    getUsbSel0Ctrl()I
+    invokeEvent(I I I I)I
+    isAudioLrSwitch()Z
+    isAutoEarcEnable(Landroid/content/Context;)Z
+    isBodyDetectEnabled()Z
+    isCecEnabled(Landroid/content/Context;)Z
+    isDolbyAtmosEnabled(Landroid/content/Context;)Z
+    isDolbyAudioEnabled(Landroid/content/Context;)Z
+    isDolbyVision()Z
+    isEarcEnable()Z
+    isHDR(Landroid/content/Context;)Z
+    isLedEnabled()Z
+    isPowerOnEnabled()Z
+    isPowerOnRingtoneEnabled()Z
+    isPqEventFinished()Z
+    isSignalLoss(Landroid/content/Context;)Z
+    isSoundSurroundEnabled(Landroid/content/Context;)Z
+    isUartEnabled()Z
+    isVRREnabled()Z
+    parseResolution(Ljava/lang/String;)[I
+    processD65Temp(Landroid/content/Context; I Z)V
+    readUnifyKey(Ljava/lang/String;)Ljava/lang/String;
+    resetPictureToDefault(Landroid/content/Context; I)V
+    resetPictureToDefault(Landroid/content/Context;)V
+    restoreHdrGamma()V
+    set3dTo2dMode(Landroid/content/Context; I)I
+    setAppoLeds(I I)V
+    setAudioLrSwitch(Z)I
+    setAudioMode(Landroid/content/Context; I)V
+    setAutoEarcEnable(Landroid/content/Context; Z)V
+    setBodyDetectEnabled(Z)I
+    setBootArgs(Ljava/lang/String; Ljava/lang/String;)V
+    setBootSource(Landroid/content/Context; I)V
+    setCecEnabled(Landroid/content/Context; Z)V
+    setColorTempMode(Landroid/content/Context; I)V
+    setDNRLevel(Landroid/content/Context; I)V
+    setDialogueEnhancerLevel(Landroid/content/Context; I)V
+    setDigitalOutput(Landroid/content/Context; I)V
+    setDlpLedForNetCtrl(Landroid/content/Context; I)V
+    setDolbyAtmosEnabled(Landroid/content/Context; Z)V
+    setDolbyAudioEnabled(Landroid/content/Context; Z)V
+    setDolbyVisionScreenGain(I)I
+    setDolbyVisionScreenSize(I)I
+    setDynamicHdrLevel(I)Z
+    setDynamicHdrMode(I)Z
+    setEDIDVersion(Landroid/content/Context; I)V
+    setEarcEnable(Z)V
+    setEmmcEnvVar(Ljava/lang/String; Ljava/lang/String;)V
+    setEotfGamma(Landroid/content/Context; I)V
+    setFanDutyCycle(I I)I
+    setFocusMotor(I)I
+    setHdcpKey(I Ljava/lang/String;)I
+    setHdcpKey(I [B)I
+    setHdrGamma(Landroid/content/Context;)V
+    setHdrMode(Landroid/content/Context; I)V
+    setLedEnabled(Z)V
+    setLineInEnable(Landroid/content/Context; I)V
+    setMemcLevel(Landroid/content/Context; I)V
+    setMtkTestPattern(I)V
+    setNoSignalPowerOff(Landroid/content/Context; I)V
+    setPowerOnEnabled(Z)V
+    setPowerOnRingtoneEnabled(Z)V
+    setPqBypass(Landroid/content/Context;)V
+    setPqMode(Landroid/content/Context; I)V
+    setPqParamValue(Landroid/content/Context; I I)V
+    setRgbGainOffset(I I I [I Ljava/lang/String;)I
+    setRgbGainOffset(I I)V
+    setRgbGainOffsetByPercent(I I)V
+    setRgbRangeMode(Landroid/content/Context; I)V
+    setScreenMode(Landroid/content/Context; I)V
+    setScreenType(I)V
+    setSoundEqualizer(Landroid/content/Context; I I)V
+    setSoundMode(Landroid/content/Context; I I)V
+    setSoundMode(Landroid/content/Context; I)V
+    setSoundSurroundEnabled(Landroid/content/Context; Z)V
+    setUartEnabled(Z)V
+    setUsbSel0Ctrl(I)I
+    setVRREnabled(Z)I
+    shutdown(Landroid/content/Context;)V
+    switchSource(Landroid/content/Context; I)V
+    writeUnifyKey(Ljava/lang/String; Ljava/lang/String;)I
+== Lcom/appo/tv/DlpManager; 
+    get24PMode()I
+    get3dMode(Landroid/content/Context;)I
+    get3dSyncInvertStatus()Z
+    getBrightness()I
+    getColorWheelDelay()I
+    getColorWheelSpeed()I
+    getCurGamma()I
+    getCurrent()Ljava/util/List;
+    getDBMode()I
+    getDlpBrightnessMode(Landroid/content/Context;)I
+    getEeprom(Ljava/lang/String;)Ljava/lang/String;
+    getGamma(I)Ljava/lang/String;
+    getHsg(I)Ljava/util/ArrayList;
+    getInstallationMode()I
+    getKeystoneData()Ljava/util/ArrayList;
+    getLightSourceTime()J
+    getSavedWarpData(I I)Ljava/util/ArrayList;
+    getSegmentCurrent()Ljava/util/List;
+    getTemperature()Landroid/util/SparseIntArray;
+    getVersion(I)Ljava/lang/String;
+    getZoomScale()F
+    isBrightnessModeSegmentEnabled()Z
+    isBrilliantColorEnabled()Z
+    isDBEnabled()Z
+    isHdrEnabled()Z
+    isLightSourceEnabled()Z
+    isLowLatencyEnabled()Z
+    isSpokeEnabled()Z
+    isWarpEnabled()Z
+    isXprEnabled()Z
+    prjSetAutoKeystoneEnable(Landroid/content/Context; I)I
+    resetGamma(I)I
+    resetHsg(I)I
+    resetPlatformData()I
+    saveWarpData(I I Ljava/util/ArrayList;)I
+    set24PMode(I)I
+    set3dMode(Landroid/content/Context; I I)I
+    set3dSyncInvert(Z)I
+    setBrightness(I)I
+    setBrightnessModeSegmentEnabled(Landroid/content/Context; Z)V
+    setBrilliantColorEnabled(Z)I
+    setColorWheelDelay(I)I
+    setControlPointsLayout(I I)I
+    setCurGamma(I)I
+    setCurrent(I I I)I
+    setDBEnabled(Z)I
+    setDBMode(I)I
+    setDlpBrightnessMode(Landroid/content/Context; I)V
+    setEeprom(Ljava/lang/String; Ljava/lang/String;)I
+    setGamma(I I)I
+    setHdrEnabled(Z)I
+    setHsg(I Ljava/util/ArrayList;)I
+    setInstallationMode(I)I
+    setKeystoneData(Ljava/util/ArrayList;)I
+    setLightSourceEnabled(Z)I
+    setLightSourceTime(J)I
+    setLowLatencyEnabled(Z)I
+    setPassThroughEnabled(Z)I
+    setSegmentCurrent(I I I I)I
+    setShiftDelta(I I)I
+    setSmoothWarpData(Ljava/util/ArrayList;)I
+    setSpokeEnabled(Z)I
+    setTestPattern(Ljava/lang/String;)I
+    setWarpData(Ljava/util/ArrayList;)I
+    setWarpEnabled(Z)I
+    setWarpPoint(I I I I)I
+    setXprEnabled(Z)I
+    setZoomScale(F)I
+== Lcom/appo/tv/TvContext$ServiceFetcher; 
+    createService(Lcom/appo/tv/TvContext;)Ljava/lang/Object;
+    getService(Lcom/appo/tv/TvContext;)Ljava/lang/Object;
+== Lcom/appo/tv/TvContext$StaticServiceFetcher; extends Lcom/appo/tv/TvContext$ServiceFetcher;
+    createStaticService()Ljava/lang/Object;
+    getService(Lcom/appo/tv/TvContext;)Ljava/lang/Object;
+== Lcom/appo/tv/TvContext; 
+    getDeviceManager()Lcom/appo/tv/DeviceManager;
+    getDlpManager()Lcom/appo/tv/DlpManager;
+    getInstance()Lcom/appo/tv/TvContext;
+    getInstanceByClass(Ljava/lang/Class; Landroid/content/Context;)Ljava/lang/Object;
+    getInstanceByClass(Ljava/lang/Class;)Ljava/lang/Object;
+    getService(Ljava/lang/String;)Ljava/lang/Object;
+    registerService(Ljava/lang/String; Lcom/appo/tv/TvContext$ServiceFetcher;)V
+== Lcom/appo/tv/test/ManagerTestProxy$MyInvocationHandler; 
+    invoke(Ljava/lang/Object; Ljava/lang/reflect/Method; [Ljava/lang/Object;)Ljava/lang/Object;
+== Lcom/appo/tv/test/ManagerTestProxy; 
+    getProxy(Ljava/lang/Object;)Ljava/lang/Object;
+
+#### XMProjectorSettings: items (settings entries) and utils
+== Lcom/xming/xmprojectorsettings/ProjectorSettingActivity;
+    finish()V
+    finishActivity()V
+    getString(I)Ljava/lang/String;
+    initItems()V
+    onBackPressed()V
+    onCreate(Landroid/os/Bundle;)V
+    onDataSetChange()V
+    onDestroy()V
+    onResume()V
+    onScaleModeChange()V
+    registerBroadcastReceiver()V
+    registerReceiver(Landroid/content/BroadcastReceiver; Landroid/content/IntentFilter;)Landroid/content/Intent;
+    unregisterBroadcastReceiver()V
+    unregisterReceiver(Landroid/content/BroadcastReceiver;)V
+== Lcom/xming/xmprojectorsettings/items/AutoCeilingItem;
+    getString(I)Ljava/lang/String;
+    initItem()V
+    selectMode(I)V
+    setArrowShow(Z)V
+    setIconId(I)V
+    setImageOrientation()V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/AutoFocusItem;
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/AutoKeystoneItem;
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/BlankScreenItem;
+    clickItem()V
+    getString(I)Ljava/lang/String;
+    setIconId(I)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/BootAutoFocusItem;
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/BootSourceItem;
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setIconId(I)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/BrightnessModeItem;
+    clickItem()V
+    doInBackground(Ljava/lang/Runnable;)V
+    getPosition(I)I
+    getString(I)Ljava/lang/String;
+    setIconId(I)V
+    setRightResourceId(I)V
+    setRightSummary(Ljava/lang/String;)V
+    setSubSummary(Ljava/lang/String;)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/DigitScale_HorItem;
+    getHorizontalScale()I
+    reset()V
+    selectMode(I)V
+    setArrowShow(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/DigitScale_PropItem;
+    getPropScale()I
+    reset()V
+    selectMode(I)V
+    setArrowShow(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/DigitScale_VerItem;
+    getVerticalScale()I
+    reset()V
+    selectMode(I)V
+    setArrowShow(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/Dlp24PItem;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setIconId(I)V
+    setRecycle(Z)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/DynamicBlackItem;
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setRecycle(Z)V
+    setRightSummarys([Ljava/lang/String;)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/DynamicContrastItem;
+    doInBackground(Ljava/lang/Runnable;)V
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setIconId(I)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/EdgeBlendItem;
+    clickItem()V
+    getString(I)Ljava/lang/String;
+    setIconId(I)V
+    setRightResourceId(I)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/HdmiMode;
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/HighAltitudeItem;
+    bindTempControlService()V
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setIconId(I)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+    unbindTempControlService()V
+== Lcom/xming/xmprojectorsettings/items/ImageModeItem;
+    clickItem()V
+    getCurrentValue(I)I
+    setIconId(I)V
+    setRightResourceId(I)V
+    setSubSummary(Ljava/lang/String;)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    build()Lcom/xming/xmprojectorsettings/AToggleItem;
+    build(Landroid/content/Context; Ljava/lang/String; [I I Z Z Z Lcom/xming/xmprojectorsettings/items/ItemBuilder$toggleInterface; Lcom/xming/xmprojectorsettings/items/ItemBuilder$clickInterface;)Lcom/xming/xmprojectorsettings/AToggleItem;
+    setArrowShow(Z Lcom/xming/xmprojectorsettings/items/ItemBuilder$toggleInterface;)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setHeader(I)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setHeader(Ljava/lang/String;)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setInitialindex(I)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setOnClickListener(Lcom/xming/xmprojectorsettings/items/ItemBuilder$clickInterface;)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setRightResource(I)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setRightSummaryArrays([I Z Z Ljava/lang/String;)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setRightSummaryArrays([I Z Z)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setRightText(I)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setRightText(Ljava/lang/String;)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setTitle(I)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setTitle(Ljava/lang/String;)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+    setType(I)Lcom/xming/xmprojectorsettings/items/ItemBuilder;
+== Lcom/xming/xmprojectorsettings/items/LightSourceBrightnessItem;
+    getTypeCLightSourceBrightness()I
+    selectModeWithoutNewThread(I)V
+    setArrowShow(Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+    swichTypeCMode(Z)V
+== Lcom/xming/xmprojectorsettings/items/MalFormationCorrectItem;
+    clickItem()V
+    setArrowShow(Z)V
+    setIconId(I)V
+    setRightResourceId(I)V
+    setSubSummary(Ljava/lang/String;)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/ManualFocusItem;
+    setIconId(I)V
+    setLimited(I I Z)V
+    setOnClickListener(Lcom/xming/xmprojectorsettings/view/SettingItemData$onClickListener;)V
+    setRightResourceId(I)V
+    setSubSummary(Ljava/lang/String;)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/ManualKeyStoneItem;
+    RefreshItem()V
+    selectMode(I)V
+    setArrowShow(Z)V
+    setAutoKeyStone(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/MemcItem;
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setIconId(I)V
+    setRecycle(Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/ProjectionModeItem;
+    doInBackground(Ljava/lang/Runnable;)V
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setIconId(I)V
+    setRecycle(Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/ProjectorScreenItem;
+    clickItem()V
+    getString(I)Ljava/lang/String;
+    setIconId(I)V
+    setRightResourceId(I)V
+    setRightSummary(Ljava/lang/String;)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/RedGainItem;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/ScreenSaveItem;
+    getDreamTimeoutValue()I
+    getMode()I
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setLimited(I I Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/ScreenScaleItem;
+    getString(I)Ljava/lang/String;
+    setRightSummary(Ljava/lang/String;)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/TestPictureItem;
+    clickItem()V
+    getString(I)Ljava/lang/String;
+    setIconId(I)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/items/XprItem;
+    getString(I)Ljava/lang/String;
+    selectMode(I)V
+    setArrowShow(Z)V
+    setIconId(I)V
+    setRecycle(Z)V
+    setRightSummary(Ljava/lang/String;)V
+    setRightSummarys([I Z)V
+    setTitle(Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/utils/ArithUtil;
+    add(D D)D
+    add(F F)F
+    add([Ljava/lang/Double;)D
+    compareTo(D D)I
+    convertsToFloat(D)F
+    convertsToInt(D)I
+    convertsToLong(D)J
+    div(D D I)D
+    div(D D)D
+    getDecimals(D)I
+    getDecimals(F)I
+    mul(D D I)D
+    mul(D D)D
+    returnMax(D D)D
+    returnMin(D D)D
+    round(D I I)D
+    round(D I)D
+    sub(D D)D
+    sub(F F)F
+== Lcom/xming/xmprojectorsettings/utils/Constant;
+    getCustomer()Ljava/lang/String;
+    isA62S()Z
+    isAP15()Z
+    isAmlogic_Projector()Z
+    isAmlogic_TV()Z
+    isAppo()Z
+    isAppoVersion()Z
+    isCommon()Z
+    isHasAutoFocus()Z
+    isInternationVersion()Z
+    isNexigo()Z
+    isRtlLayoutDirection()Z
+    isT866Paltform()Z
+    isT962Paltform()Z
+    isT968Paltform()Z
+    isTricolor()Z
+    isVaVa()Z
+== Lcom/xming/xmprojectorsettings/utils/CustomLog;
+    d(Ljava/lang/String; Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/utils/EdgeBlend;
+    enableBandGamma(Z)V
+    enableBias(Z)V
+    enableEdgeBlend(Z)V
+    enableFunction(Z)V
+    enableMarker(Z)V
+    enableOutputGamma(Z)V
+    enableSplicingScreen(Landroid/content/Context; I)V
+    getBandGamma(I)F
+    getConfBandGamma(Landroid/content/Context;)[F
+    getConfBias(Landroid/content/Context;)[I
+    getConfColor(Landroid/content/Context;)I
+    getConfHBandWidth(Landroid/content/Context;)I
+    getConfHIndex(Landroid/content/Context;)I
+    getConfHTotal(Landroid/content/Context;)I
+    getConfOutputGamma(Landroid/content/Context;)[F
+    getConfScreenIndex(Landroid/content/Context;)I
+    getConfVBandWidth(Landroid/content/Context;)I
+    getConfVIndex(Landroid/content/Context;)I
+    getConfVTotal(Landroid/content/Context;)I
+    getEnabled(Landroid/content/Context;)I
+    getHorBandWidth()I
+    getMaxBandGamma()F
+    getMaxHorBandWidth()I
+    getMaxOutputGamma()F
+    getMaxPalette()I
+    getMaxVerBandWidth()I
+    getMinBandGamma()F
+    getMinHorBandWidth()I
+    getMinOutputGamma()F
+    getMinPalette()I
+    getMinVerBandWidth()I
+    getOutputGamma(I)F
+    getPaletteColor(I)I
+    getScreenArea()Landroid/graphics/Rect;
+    getState(Z)I
+    getVerBandWidth()I
+    init()V
+    isFunctionEnabled()Z
+    parseFloatValsStr(Ljava/lang/String;)[F
+    parseIntValsStr(Ljava/lang/String;)[I
+== Lcom/xming/xmprojectorsettings/utils/LightSourceConstant;
+== Lcom/xming/xmprojectorsettings/utils/ProjectorManagerUtil;
+    getMode(Landroid/content/Context; Ljava/lang/String; I)I
+    saveMode(Landroid/content/Context; Ljava/lang/String; I)V
+== Lcom/xming/xmprojectorsettings/utils/ProjectorUtilFuncs;
+== Lcom/xming/xmprojectorsettings/utils/ScreenAdapterUtils;
+    adapterViewByMinScale(Landroid/view/View;)Landroid/view/View;
+    adapterViewByWidth(I)Landroid/view/View;
+    adapterViewByWidth(Landroid/view/View;)Landroid/view/View;
+    getInstance(Landroid/content/Context; I I)Lcom/xming/xmprojectorsettings/utils/ScreenAdapterUtils;
+== Lcom/xming/xmprojectorsettings/utils/UtilFunctions;
+    computeSampleSizeLargerAccFilePath(Ljava/lang/String; I I)I
+    exeRuntime(Ljava/lang/String;)V
+    getModel()Ljava/lang/String;
+    getTypeCMaxValue()I
+    isInTypeCMode()Z
+    moveHighLightBorderOnTop(Landroid/widget/ImageView; Landroid/view/View; I)V
+    moveViewToSpecifiedPositon(Landroid/widget/ImageView; F F I)V
+    prevPowerOf2(I)I
+    startActivity(Landroid/content/Context; Ljava/lang/String; Ljava/lang/String;)V
+== Lcom/xming/xmprojectorsettings/utils/WarpingUtil;
+    getDataByWarpStep(Ljava/util/List; F Z)Ljava/util/ArrayList;
+    getDefaultWarpData(I I)Ljava/util/ArrayList;
+    getKeystoneType()I
+    getSavedData(I Ljava/lang/String;)Ljava/util/List;
+    getSavedShiftX()I
+    getSavedShiftY()I
+    getSavedWarpFix(I)Ljava/util/List;
+    getSavedWarpStep(I)Ljava/util/List;
+    getShiftState()[I
+    getWarpCenter(Ljava/util/List;)[F
+    saveData(Ljava/util/List; I Ljava/lang/String;)V
+    saveShiftX(I)V
+    saveShiftY(I)V
+    saveWarpFix(Ljava/util/List; I)V
+    saveWarpStep(Ljava/util/List; I)V
+    setWarpData(Ljava/util/ArrayList; Z)I
+    setWarpData(Ljava/util/ArrayList;)I

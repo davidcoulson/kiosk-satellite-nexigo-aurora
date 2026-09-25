@@ -1,0 +1,42 @@
+-rwxr-xr-x 1 root shell     289 2008-12-31 11:00 appo_reinsmod_wifi.sh
+-rwxr-xr-x 1 root shell   42284 2008-12-31 11:00 appothermal
+-rwxr-xr-x 1 root shell    6728 2008-12-31 11:00 mstar.hardware.light@2.0-service
+-rwxr-xr-x 1 root shell   28656 2008-12-31 11:00 projector-test
+-rwxr-xr-x 1 root shell  251248 2008-12-31 11:00 vendor.appotronics.projectormanager@1.0-service
+#### libs
+android.hardware.light@2.0.so
+libOMX.MStar.so
+libstagefright_xmlparser.so
+libtinyxml2.so
+libxml2.so
+mstar.hardware.hwcomposer.composer@2.3.so
+mstar.hardware.imgdisp@1.0-impl.so
+mstar.hardware.imgdisp@1.0.so
+mstar.hardware.imghwdec@1.0-impl.so
+mstar.hardware.imghwdec@1.0.so
+mstar.hardware.intertunnel@1.0-impl.so
+mstar.hardware.intertunnel@1.0.so
+mstar.hardware.light@2.0-impl.so
+mstar.hardware.light@2.0.so
+mstar.hardware.mmdisp@1.0-impl.so
+mstar.hardware.mmdisp@1.0.so
+mstar.hardware.power@1.1-impl.so
+mstar.hardware.power@1.1.so
+vendor.appotronics.projectormanager@1.0.so
+#### framework
+android.software.verified_boot.xml
+android.software.webview.xml
+com.android.location.provider.xml
+com.android.media.remotedisplay.xml
+com.android.media.tv.remoteprovider.xml
+com.android.mediadrm.signer.xml
+com.google.android.tv.installed.xml
+platform.xml
+privapp-permissions-mediatek.xml
+privapp-permissions-platform.xml
+tv_core_hardware.xml
+apache-xml.jar
+boot-apache-xml.vdex
+com.appotronics.support.jar
+com.mediatek.PhotoRender.jar
+com.mediatek.common.PhotoPlayer.jar
