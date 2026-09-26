@@ -43,11 +43,20 @@ final class Projector {
      * light engine, then flag the screen-off state. Without the two flags the eye-protection
      * service re-lights the laser or the projector drops to standby.
      */
+    /**
+     * This plugin's own note that it turned the picture off. The vendor's screen-off flag is
+     * cleared whenever Android wakes its display (a Kiosk Satellite restart or update does it),
+     * and without it the firmware re-lights the laser; the note says to put it back. A cur.*
+     * property outlives the app and the plugin and is gone after a boot, like the flags.
+     */
+    static final String HELD_PROP = "cur.djc.picture_off";
+
     static String pictureScript(boolean on) {
         String flag = on ? "true" : "false";
         return "setprop cur.appo.light.enabled " + flag
             + " && " + TOOL + " setLightSourceOnOff " + flag
-            + " && setprop cur.prj.screenOff " + (on ? "false" : "true");
+            + " && setprop cur.prj.screenOff " + (on ? "false" : "true")
+            + "; setprop " + HELD_PROP + " " + (on ? "false" : "true");
     }
 
     static String ledsScript(int status) {
@@ -101,7 +110,7 @@ final class Projector {
      * a light that went out on its own is only recorded, never promoted to a deliberate dark.
      */
     static String reflagLightScript(boolean on) {
-        return on ? "setprop cur.appo.light.enabled true; setprop cur.prj.screenOff false"
+        return on ? "setprop cur.appo.light.enabled true; setprop cur.prj.screenOff false; setprop " + HELD_PROP + " false"
             : "setprop cur.appo.light.enabled false";
     }
 
@@ -138,6 +147,7 @@ final class Projector {
     static final String POLL_SCRIPT =
         "echo \"light=$(getprop cur.appo.light.enabled)\";"
         + " echo \"screenoff=$(getprop cur.prj.screenOff)\";"
+        + " echo \"held=$(getprop " + HELD_PROP + ")\";"
         + " echo \"source=$(getprop cur.prj.currentSourceId)\";"
         + " echo \"mode=$(settings get global picture_mode 2>/dev/null)\";"
         + " echo \"minutes=$(" + TOOL + " getPlatformProperty used_time 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
@@ -224,6 +234,8 @@ final class Projector {
         Boolean ignoreCecStandby;
         Integer noSignalOff;
         Integer sleepMode;
+        /** This plugin turned the picture off and nothing has lit it since (see HELD_PROP). */
+        Boolean heldOff;
         /** appothermal's commanded fan speed in percent. */
         Integer fanPercent;
         final Map<String, Double> temperatures = new LinkedHashMap<>();
@@ -273,6 +285,7 @@ final class Projector {
                 case "cec": s.ignoreCecStandby = bool(value); break;
                 case "nosignal": s.noSignalOff = integer(value); break;
                 case "sleep": s.sleepMode = integer(value); break;
+                case "held": s.heldOff = bool(value); break;
                 case "fan": s.fanPercent = integer(value.substring(value.indexOf(':') + 1)); break;
                 case "temps": parseTemperatures(value, s); break;
                 default: break;

@@ -65,6 +65,7 @@ public final class AuroraPluginTestAccess {
         commands();
         observed();
         heat();
+        restart();
         guard();
         framework();
         fallback();
@@ -148,8 +149,9 @@ public final class AuroraPluginTestAccess {
         Projector.State odd = Projector.parse("source=99\nmode=6\n");
         assert odd.sourceId == 99 && odd.input() == null && odd.pictureMode == 6 && odd.pictureModeLabel() == null : "unmapped ids stay unknown";
         assert Projector.pictureScript(false).equals(
-            "setprop cur.appo.light.enabled false && /vendor/bin/hw/projector-test setLightSourceOnOff false && setprop cur.prj.screenOff true") : "off recipe order";
-        assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false") : "on recipe";
+            "setprop cur.appo.light.enabled false && /vendor/bin/hw/projector-test setLightSourceOnOff false && setprop cur.prj.screenOff true; setprop cur.djc.picture_off true") : "off recipe order";
+        assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false; setprop cur.djc.picture_off false") : "on recipe";
+        assert Boolean.TRUE.equals(Projector.parse("held=true\n").heldOff) && Projector.parse("held=\n").heldOff == null : "held note";
         assert Projector.inputScript(7).endsWith("HW7") : "input uri";
         assert Projector.ledsScript(Projector.LED_OFF).endsWith("setAppoLeds 2 6") && Projector.ledsScript(Projector.LED_STANDBY).endsWith("setAppoLeds 2 2") : "leds";
         assert Projector.idFor(Projector.LEDS, Projector.LED_IDS, "Bluetooth") == 4 : "led table";
@@ -345,6 +347,30 @@ public final class AuroraPluginTestAccess {
         assert Boolean.FALSE.equals(host2.switches.get("picture")) : "a stale hot reading after the command does not re-light it";
         assert !after.scripts.contains(Projector.reflagLightScript(true)) : "never re-flagged on";
         dark.stop();
+    }
+
+    /** A Kiosk Satellite restart: a fresh plugin, the display woken (screen-off flag cleared, light
+     *  still off) and the projector's own note that the picture was turned off from here. */
+    static void restart() throws Exception {
+        FakeShell shell = new FakeShell();
+        shell.pollAnswer = darkAt(27, 23).replace("screenoff=true", "screenoff=false").replace("light=false", "light=false\nheld=true");
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null);
+        plugin.start(host, settings("Direct", 30));
+        waitFor(host, "picture");
+        assert shell.scripts.contains(Projector.REFLAG_SCREEN_OFF_SCRIPT) : "deliberate dark put back after a restart: " + shell.scripts;
+        assert Boolean.TRUE.equals(host.binary.get("screen_off")) : "screen off shows";
+        plugin.stop();
+
+        // The same dark without the note (the power menu, the sleep timer) is only recorded.
+        FakeShell other = new FakeShell();
+        other.pollAnswer = darkAt(27, 23).replace("screenoff=true", "screenoff=false");
+        FakeHost host2 = new FakeHost();
+        AuroraPlugin plugin2 = new AuroraPlugin(other, null);
+        plugin2.start(host2, settings("Direct", 30));
+        waitFor(host2, "picture");
+        assert !other.scripts.contains(Projector.REFLAG_SCREEN_OFF_SCRIPT) : "a dark this plugin did not ask for is not promoted";
+        plugin2.stop();
     }
 
     static Projector.State parseWith(int blue, int ambient) { return Projector.parse(darkAt(blue, ambient)); }

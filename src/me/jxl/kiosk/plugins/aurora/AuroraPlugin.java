@@ -305,6 +305,9 @@ public final class AuroraPlugin implements KioskPlugin {
         Shell.Result r = runner.run(Projector.POLL_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         if (!r.ok()) { status("Could not read the projector via " + channelName + ": " + r.why(), true); return; }
         Projector.State s = Projector.parse(r.stdout);
+        // What this plugin asked for survives a Kiosk Satellite restart in the projector's own
+        // properties; the in-memory flag alone forgot it, and the laser came back on.
+        if (s.heldOff != null) commandedPictureOff = s.heldOff;
         // The log answers only the shell user: behind a direct channel, the shell-user channel
         // reads that one line.
         if (s.temperatures.isEmpty() && extra != null) {
