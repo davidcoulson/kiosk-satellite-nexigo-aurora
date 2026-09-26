@@ -62,7 +62,7 @@ appears in Home Assistant as an ESPHome device. This plugin adds the projector t
 
 | Entity | Kind | What it does |
 | --- | --- | --- |
-| **Picture** | switch | The screen-off recipe above. Off: laser and fans stop, Android stays awake. On: back in a second. State is read back from `cur.appo.light.enabled`, which every path on the projector (power menu, remote key, sleep timer) keeps in step, and checked against the laser's heat: a blue laser well over ambient and not cooling is lit, one near ambient is dark (the HAL's minute counter climbs with the laser cold and is not used). |
+| **Picture** | switch | The screen-off recipe above. Off: laser and fans stop, Android stays awake. On: back in a second. State is read back from `cur.appo.light.enabled`, which every path on the projector (power menu, remote key, sleep timer) keeps in step, and checked against the laser's heat: a blue laser well over ambient and heating is lit, one near ambient is dark (the HAL's minute counter climbs with the laser cold and is not used). |
 | **Input** | select | HDMI 1-4, through the TV input framework. Reads back from `cur.prj.currentSourceId`. |
 | **Picture mode** | select | Cinema Home, Cinema Pro, Standard, Brightest, Game, Custom (`picture_mode`). Read through the framework; written through the framework when Kiosk Satellite holds `WRITE_SECURE_SETTINGS`, else through Shizuku. |
 | **Screen off** | binary sensor | `cur.prj.screenOff`: the dark is deliberate. |

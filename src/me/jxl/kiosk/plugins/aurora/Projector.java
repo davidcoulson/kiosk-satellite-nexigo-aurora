@@ -154,8 +154,11 @@ final class Projector {
      *  22-23 °C room (2026-09-25/26). */
     static final String LASER_NTC = "NtcBlueLaser1";
     static final String AMBIENT_NTC = "NtcEnv1";
-    /** Over ambient by this much and not cooling: lit. */
+    /** Over ambient by this much and heating by at least HEATING_STEP since the last read: lit.
+     *  Heating, not merely hot: a cooling laser plateaus (the readings are whole degrees), and a
+     *  plateau must not read as lit. */
     static final double LIT_OVER_AMBIENT = 12;
+    static final double HEATING_STEP = 2;
     /** Within this much of ambient: dark. Between the two, or hot and cooling, the flag decides. */
     static final double DARK_OVER_AMBIENT = 8;
     /** How long after a picture command the heat is not trusted: the log line can be 30 s old and
@@ -163,16 +166,17 @@ final class Projector {
     static final long LASER_SETTLE_MS = 180_000L;
 
     /**
-     * What the laser's heat says about the light: true when well over ambient and not cooling
-     * (a trend needs the previous reading, so the first read never says lit), false when back
-     * near ambient, null when it cannot tell (no log, the band between, or hot and cooling).
+     * What the laser's heat says about the light: true when well over ambient and heating (a
+     * laser lit behind the flags' back), false when back near ambient, null when it cannot tell
+     * (no log, no previous reading, steady, cooling, or the band between). A steady hot laser
+     * says nothing: the flag already agrees with it unless the plugin started after it was lit.
      */
     static Boolean laserLit(State s, Double previousBlue) {
         Double blue = s.temperatures.get(LASER_NTC), ambient = s.temperatures.get(AMBIENT_NTC);
         if (blue == null || ambient == null) return null;
         double over = blue - ambient;
         if (over <= DARK_OVER_AMBIENT) return Boolean.FALSE;
-        if (over >= LIT_OVER_AMBIENT && previousBlue != null && blue >= previousBlue) return Boolean.TRUE;
+        if (over >= LIT_OVER_AMBIENT && previousBlue != null && blue - previousBlue >= HEATING_STEP) return Boolean.TRUE;
         return null;
     }
 

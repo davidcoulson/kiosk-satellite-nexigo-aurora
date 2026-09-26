@@ -298,7 +298,10 @@ public final class AuroraPluginTestAccess {
     static void heat() throws Exception {
         Projector.State cold = parseWith(27, 23), hot = parseWith(53, 23), cooling = parseWith(45, 23);
         assert Boolean.FALSE.equals(Projector.laserLit(cold, 28.0)) : "near ambient is dark";
-        assert Boolean.TRUE.equals(Projector.laserLit(hot, 53.0)) : "hot and steady is lit";
+        assert Boolean.TRUE.equals(Projector.laserLit(hot, 40.0)) : "hot and heating is lit";
+        assert Projector.laserLit(hot, 53.0) == null : "hot and steady defers to the flag";
+        assert Projector.laserLit(parseWith(41, 23), 41.0) == null : "a cooling plateau is not lit";
+        assert Projector.laserLit(parseWith(42, 23), 41.0) == null : "one degree of noise is not heating";
         assert Projector.laserLit(hot, null) == null : "no trend on the first read";
         assert Projector.laserLit(cooling, 53.0) == null : "hot and cooling defers to the flag";
         assert Projector.laserLit(parseWith(33, 23), 30.0) == null : "the band between defers";

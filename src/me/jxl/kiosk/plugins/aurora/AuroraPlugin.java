@@ -321,8 +321,8 @@ public final class AuroraPlugin implements KioskPlugin {
         fill(s, "no_signal_auto_power_off", "nosignal");
         // The flags only record what was asked through the vendor's own code path; the TV app can
         // light the laser straight through the HAL and leave cur.appo.light.enabled at false. The
-        // laser's own heat is the readback: the blue laser runs ~30 °C over ambient when lit and
-        // settles near ambient when dark. The HAL's minute counter looked like one and is not (on
+        // laser's own heat is the readback: the blue laser runs ~30 °C over ambient when lit, climbs
+        // fast when it lights and settles near ambient when dark. The HAL's minute counter looked like one and is not (on
         // 2026-09-26 it climbed every minute with the laser cold and re-lit the picture twice).
         long now = System.currentTimeMillis();
         Double blue = s.temperatures.get(Projector.LASER_NTC);
