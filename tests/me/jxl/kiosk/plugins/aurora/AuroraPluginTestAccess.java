@@ -362,6 +362,20 @@ public final class AuroraPluginTestAccess {
         assert Boolean.TRUE.equals(host.binary.get("screen_off")) : "screen off shows";
         plugin.stop();
 
+        // Then the vendor lights the laser for Kiosk Satellite's activity, flags untouched: with the
+        // picture held off from here it goes straight back off, and the note stays.
+        FakeShell relit = new FakeShell();
+        relit.pollAnswer = darkAt(27, 23).replace("light=false", "light=false\nheld=true");
+        FakeHost host3 = new FakeHost();
+        AuroraPlugin plugin3 = new AuroraPlugin(relit, null);
+        plugin3.start(host3, settings("Direct", 30));
+        waitFor(host3, "picture");
+        refreshAnswer(plugin3, relit, darkAt(40, 23).replace("light=false", "light=false\nheld=true"));
+        assert relit.scripts.contains(Projector.pictureScript(false)) : "re-darkened after the start lit it: " + relit.scripts;
+        assert !relit.scripts.contains(Projector.reflagLightScript(true)) : "not reported as lit";
+        assert Boolean.FALSE.equals(host3.switches.get("picture")) : "picture stays off";
+        plugin3.stop();
+
         // The same dark without the note (the power menu, the sleep timer) is only recorded.
         FakeShell other = new FakeShell();
         other.pollAnswer = darkAt(27, 23).replace("screenoff=true", "screenoff=false");

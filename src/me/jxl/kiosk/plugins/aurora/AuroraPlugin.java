@@ -61,6 +61,8 @@ public final class AuroraPlugin implements KioskPlugin {
     private Double lastBlue;
     private volatile long pictureCommandAt;
     private boolean fanPublished;
+    /** When this plugin started, which is when Kiosk Satellite (re)started. */
+    private volatile long startedAt;
     private boolean laserPublished;
     /** What cur.prj.currentSourceId said when that input was commanded; a later change means
      *  the projector's own menu was used and wins. */
@@ -107,6 +109,7 @@ public final class AuroraPlugin implements KioskPlugin {
     }
 
     @Override public void start(PluginHost host, Map<String, Object> settings) {
+        startedAt = System.currentTimeMillis();
         this.host = host;
         this.settings = new HashMap<>(settings);
         alive.set(true);
@@ -336,9 +339,19 @@ public final class AuroraPlugin implements KioskPlugin {
         // picture command the flag is the truth.
         if (now - pictureCommandAt < Projector.LASER_SETTLE_MS) heatSays = null;
         if (heatSays != null && !heatSays.equals(s.light)) {
-            s.light = heatSays;
-            if (heatSays) { s.screenOff = Boolean.FALSE; commandedPictureOff = false; }
-            runner.run(Projector.reflagLightScript(heatSays), 4000);
+            if (heatSays && commandedPictureOff && now - startedAt < Projector.RESTART_GUARD_MS) {
+                // Kiosk Satellite starting brings its activity forward; the vendor's background
+                // service then lights the laser for the Android UI (AT+LightSource=On, 2026-09-26),
+                // flags untouched. The picture was held off from here, so it goes back off.
+                runner.run(Projector.pictureScript(false), Shell.DEFAULT_TIMEOUT_MS);
+                s.light = Boolean.FALSE;
+                s.screenOff = Boolean.TRUE;
+                settleLight();
+            } else {
+                s.light = heatSays;
+                if (heatSays) { s.screenOff = Boolean.FALSE; commandedPictureOff = false; }
+                runner.run(Projector.reflagLightScript(heatSays), 4000);
+            }
         }
         // Android waking its display (a Kiosk Satellite restart does it) clears cur.prj.screenOff
         // while the light stays off. The flag is what tells the vendor's services the dark is

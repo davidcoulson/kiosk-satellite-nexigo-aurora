@@ -186,6 +186,9 @@ final class Projector {
     /** How long after a picture command the heat is not trusted: the log line can be 30 s old and
      *  the laser takes a minute or more to warm or cool across the thresholds. */
     static final long LASER_SETTLE_MS = 180_000L;
+    /** How long after the plugin (so Kiosk Satellite) starts a laser lit behind a held-off picture
+     *  is put back out rather than reported: the start itself is what lit it. */
+    static final long RESTART_GUARD_MS = 300_000L;
 
     /**
      * What the laser's heat says about the light: true when well over ambient and heating (a
