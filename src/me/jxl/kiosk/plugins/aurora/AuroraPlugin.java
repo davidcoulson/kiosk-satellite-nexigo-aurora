@@ -61,6 +61,7 @@ public final class AuroraPlugin implements KioskPlugin {
     private Double lastBlue;
     private volatile long pictureCommandAt;
     private boolean fanPublished;
+    private boolean laserPublished;
     /** What cur.prj.currentSourceId said when that input was commanded; a later change means
      *  the projector's own menu was used and wins. */
     private Integer sourceAtCommand;
@@ -376,6 +377,12 @@ public final class AuroraPlugin implements KioskPlugin {
             host.publishSensor("fan_speed", "Fan speed", sensorMeta("%", null, "measurement", 0),
                 s.fanPercent == null ? null : s.fanPercent.doubleValue());
             fanPublished = true;
+        }
+        // One number for the light engine's heat: whichever laser bank runs warmest.
+        Double laser = Projector.hottestLaser(s);
+        if (laser != null || laserPublished) {
+            host.publishSensor("laser_temp", "Laser temperature", sensorMeta("°C", "temperature", "measurement", 0), laser);
+            laserPublished = true;
         }
         for (String[] t : Projector.TEMPERATURES) {
             Double value = s.temperatures.get(t[0]);

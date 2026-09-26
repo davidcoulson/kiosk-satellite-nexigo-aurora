@@ -126,6 +126,9 @@ public final class AuroraPluginTestAccess {
         assert Boolean.TRUE.equals(s.light) && Boolean.FALSE.equals(s.screenOff) : "flags";
         assert s.laserWdt == 40 : "wdt";
         assert s.fanPercent == 40 : "fan";
+        assert Double.valueOf(34).equals(Projector.hottestLaser(s)) : "hottest laser";
+        assert Projector.hottestLaser(Projector.parse("light=true\n")) == null : "no lasers, no reading";
+        assert Double.valueOf(43).equals(Projector.hottestLaser(Projector.parse("temps=AT+Temperature#NtcRedLaser1:43,NtcGreenLaser1:41,NtcBlueLaser1:40\n"))) : "red can be the warmest";
         assert "HDMI 2".equals(s.input()) : "input " + s.input();
         assert "Cinema Pro".equals(s.pictureModeLabel()) : "mode";
         assert s.laserMinutes == 1530L : "minutes";
@@ -163,6 +166,7 @@ public final class AuroraPluginTestAccess {
         assert shell.scripts.contains(Projector.STAY_ON_SCRIPT) : "stay-on guards applied at start";
         assert Boolean.TRUE.equals(host.binary.get("stays_on")) : "stays on";
         assert Double.valueOf(40).equals(host.sensors.get("fan_speed")) : "fan speed published: " + host.sensors.get("fan_speed");
+        assert Double.valueOf(34).equals(host.sensors.get("laser_temp")) : "hottest laser (blue 34 over red 28, green 25): " + host.sensors.get("laser_temp");
         assert Boolean.TRUE.equals(host.switches.get("picture")) : "switch from light flag";
         assert "HDMI 2".equals(host.selects.get("input")) : "input select";
         assert "Cinema Pro".equals(host.selects.get("picture_mode")) : "mode select";

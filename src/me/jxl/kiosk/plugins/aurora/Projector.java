@@ -154,6 +154,18 @@ final class Projector {
      *  22-23 °C room (2026-09-25/26). */
     static final String LASER_NTC = "NtcBlueLaser1";
     static final String AMBIENT_NTC = "NtcEnv1";
+    /** The three laser banks, for the single hottest-laser reading. */
+    static final String[] LASER_NTCS = {"NtcRedLaser1", "NtcGreenLaser1", "NtcBlueLaser1"};
+
+    /** The warmest laser bank, or null when the log gave none of them. */
+    static Double hottestLaser(State s) {
+        Double hottest = null;
+        for (String k : LASER_NTCS) {
+            Double v = s.temperatures.get(k);
+            if (v != null && (hottest == null || v > hottest)) hottest = v;
+        }
+        return hottest;
+    }
     /** Over ambient by this much and heating by at least HEATING_STEP since the last read: lit.
      *  Heating, not merely hot: a cooling laser plateaus (the readings are whole degrees), and a
      *  plateau must not read as lit. */
