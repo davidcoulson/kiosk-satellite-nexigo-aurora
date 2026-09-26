@@ -192,11 +192,10 @@ final class Projector {
         return null;
     }
 
-    /** The light engine's NTC names as the HAL logs them, and the entity keys they become. */
+    /** The light engine's NTC names as the HAL logs them, and the entity keys they become. The
+     *  three laser banks are read (the light check, the hottest-laser sensor) but not published
+     *  one by one: Laser temperature stands for them. */
     static final String[][] TEMPERATURES = {
-        {"NtcRedLaser1", "red_laser", "Red laser"},
-        {"NtcGreenLaser1", "green_laser", "Green laser"},
-        {"NtcBlueLaser1", "blue_laser", "Blue laser"},
         {"NtcCw1", "color_wheel", "Colour wheel"},
         {"NtcDmd1", "dmd", "DMD"},
         {"NtcEnv1", "ambient", "Ambient"},

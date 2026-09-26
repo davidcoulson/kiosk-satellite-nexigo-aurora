@@ -68,7 +68,7 @@ appears in Home Assistant as an ESPHome device. This plugin adds the projector t
 | **Screen off** | binary sensor | `cur.prj.screenOff`: the dark is deliberate. |
 | **Stays on when the source sleeps** | binary sensor | Every guard in place: CEC standby ignored, the vendor sleep timer off (`persist.prj.sleepMode` 0; it shipped on and stands the projector by after about two hours) and the no-signal shutdown off. The plugin sets them at start and again on any read that finds one changed (the no-signal setting needs the shell user: ADB, Shizuku or the permission above). |
 | **Laser hours** | sensor | The lifetime light-source counter from the HAL's own store (`getPlatformProperty used_time`, minutes; the value the projector's menu shows). |
-| **Red/Green/Blue laser, Colour wheel, DMD, Ambient temperature** | sensors | The light engine's NTCs, from its 30-second report in the log. Needs the shell user to read the log: the loopback ADB channel or Shizuku; a temperature is published once it has been seen. |
+| **Colour wheel, DMD, Ambient temperature** | sensors | The light engine's NTCs, from its 30-second report in the log. Needs the shell user to read the log: the loopback ADB channel or Shizuku; a temperature is published once it has been seen. |
 | **Laser temperature** | sensor | The warmest of the red, green and blue laser banks: one number for the light engine's heat. |
 | **Fan speed** | sensor | The speed the vendor's thermal daemon commands, in percent, from the same log (one value drives every fan PWM; the fans have no tachometer). |
 

@@ -167,6 +167,8 @@ public final class AuroraPluginTestAccess {
         assert Boolean.TRUE.equals(host.binary.get("stays_on")) : "stays on";
         assert Double.valueOf(40).equals(host.sensors.get("fan_speed")) : "fan speed published: " + host.sensors.get("fan_speed");
         assert Double.valueOf(34).equals(host.sensors.get("laser_temp")) : "hottest laser (blue 34 over red 28, green 25): " + host.sensors.get("laser_temp");
+        assert !host.sensors.containsKey("temp_red_laser") && !host.sensors.containsKey("temp_blue_laser") && !host.sensors.containsKey("temp_green_laser") : "no per-laser sensors: " + host.sensors.keySet();
+        assert Double.valueOf(37).equals(host.sensors.get("temp_dmd")) : "the other NTCs still publish";
         assert Boolean.TRUE.equals(host.switches.get("picture")) : "switch from light flag";
         assert "HDMI 2".equals(host.selects.get("input")) : "input select";
         assert "Cinema Pro".equals(host.selects.get("picture_mode")) : "mode select";
