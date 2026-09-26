@@ -121,8 +121,13 @@ final class Projector {
      *  the log is chatty enough that the last few hundred lines often miss it. */
     static final String TEMPS_LINE = "echo \"temps=$(logcat -d --pid=$(pidof vendor.appotronics.projectormanager@1.0-service) 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\";";
 
+    /** The last light-source command the HAL sent the light engine, whoever asked for it: this
+     *  plugin, the remote, or the vendor's own services lighting it for the Android UI (which
+     *  leave the flags alone). The one direct readback of the laser. */
+    static final String LIGHT_SOURCE_LINE = " echo \"ls=$(logcat -d --pid=$(pidof vendor.appotronics.projectormanager@1.0-service) 2>/dev/null | grep -oE 'AT\\+LightSource=(On|Off)' | tail -1)\";";
+
     /** The log lines alone, for a shell-user channel behind a direct one. */
-    static final String TEMPS_SCRIPT = TEMPS_LINE + FAN_LINE;
+    static final String TEMPS_SCRIPT = TEMPS_LINE + LIGHT_SOURCE_LINE + FAN_LINE;
 
     /** Proves a loopback ADB session is the shell user, which is the point of it. */
     static final String ADB_PROBE_SCRIPT = "id";
@@ -153,6 +158,7 @@ final class Projector {
         + " echo \"minutes=$(" + TOOL + " getPlatformProperty used_time 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
         + " echo \"wdt=$(" + TOOL + " getPlatformProperty laser_used_time_wdt 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
         + " " + TEMPS_LINE
+        + LIGHT_SOURCE_LINE
         + FAN_LINE + ";"
         + " echo \"leds=$(cat /sys/class/appo_led_pwm_pm/appo_led_pwm_pm/led_pwm 2>/dev/null)\";"
         + " echo \"boot=$(settings get global boot_source_id 2>/dev/null)\";"
@@ -239,6 +245,8 @@ final class Projector {
         Integer sleepMode;
         /** This plugin turned the picture off and nothing has lit it since (see HELD_PROP). */
         Boolean heldOff;
+        /** The last AT+LightSource command in the HAL's log: true On, false Off, null none seen. */
+        Boolean lightSource;
         /** appothermal's commanded fan speed in percent. */
         Integer fanPercent;
         final Map<String, Double> temperatures = new LinkedHashMap<>();
@@ -289,6 +297,7 @@ final class Projector {
                 case "nosignal": s.noSignalOff = integer(value); break;
                 case "sleep": s.sleepMode = integer(value); break;
                 case "held": s.heldOff = bool(value); break;
+                case "ls": s.lightSource = value.endsWith("=On") ? Boolean.TRUE : value.endsWith("=Off") ? Boolean.FALSE : null; break;
                 case "fan": s.fanPercent = integer(value.substring(value.indexOf(':') + 1)); break;
                 case "temps": parseTemperatures(value, s); break;
                 default: break;

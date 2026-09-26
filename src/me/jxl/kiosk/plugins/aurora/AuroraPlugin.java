@@ -319,6 +319,7 @@ public final class AuroraPlugin implements KioskPlugin {
                 Projector.State log = Projector.parse(more.stdout);
                 s.temperatures.putAll(log.temperatures);
                 if (s.fanPercent == null) s.fanPercent = log.fanPercent;
+                if (s.lightSource == null) s.lightSource = log.lightSource;
             }
         }
         // The settings command answers only the shell user; from the kiosk process the framework
@@ -338,6 +339,9 @@ public final class AuroraPlugin implements KioskPlugin {
         // The log line can be 30 s old and a laser takes a minute to warm or cool: right after a
         // picture command the flag is the truth.
         if (now - pictureCommandAt < Projector.LASER_SETTLE_MS) heatSays = null;
+        // The HAL's own last light-source command outranks the heat: it is logged the moment it
+        // is sent, a laser relit while still hot barely warms further, and it names every sender.
+        if (s.lightSource != null) heatSays = s.lightSource;
         if (heatSays != null && !heatSays.equals(s.light)) {
             if (heatSays && commandedPictureOff && now - startedAt < Projector.RESTART_GUARD_MS) {
                 // Kiosk Satellite starting brings its activity forward; the vendor's background

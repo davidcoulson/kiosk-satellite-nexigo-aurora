@@ -152,6 +152,8 @@ public final class AuroraPluginTestAccess {
             "setprop cur.appo.light.enabled false && /vendor/bin/hw/projector-test setLightSourceOnOff false && setprop cur.prj.screenOff true; setprop cur.djc.picture_off true") : "off recipe order";
         assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false; setprop cur.djc.picture_off false") : "on recipe";
         assert Boolean.TRUE.equals(Projector.parse("held=true\n").heldOff) && Projector.parse("held=\n").heldOff == null : "held note";
+        assert Boolean.TRUE.equals(Projector.parse("ls=AT+LightSource=On\n").lightSource) && Boolean.FALSE.equals(Projector.parse("ls=AT+LightSource=Off\n").lightSource)
+            && Projector.parse("ls=\n").lightSource == null : "light-source command";
         assert Projector.inputScript(7).endsWith("HW7") : "input uri";
         assert Projector.ledsScript(Projector.LED_OFF).endsWith("setAppoLeds 2 6") && Projector.ledsScript(Projector.LED_STANDBY).endsWith("setAppoLeds 2 2") : "leds";
         assert Projector.idFor(Projector.LEDS, Projector.LED_IDS, "Bluetooth") == 4 : "led table";
@@ -375,6 +377,28 @@ public final class AuroraPluginTestAccess {
         assert !relit.scripts.contains(Projector.reflagLightScript(true)) : "not reported as lit";
         assert Boolean.FALSE.equals(host3.switches.get("picture")) : "picture stays off";
         plugin3.stop();
+
+        // Relit while still hot: the heat barely moves, but the HAL's own command gives it away.
+        FakeShell hot = new FakeShell();
+        hot.pollAnswer = darkAt(60, 23).replace("light=false", "light=false\nheld=true\nls=AT+LightSource=On");
+        FakeHost host4 = new FakeHost();
+        AuroraPlugin plugin4 = new AuroraPlugin(hot, null);
+        plugin4.start(host4, settings("Direct", 30));
+        waitFor(host4, "picture");
+        assert hot.scripts.contains(Projector.pictureScript(false)) : "re-darkened on the HAL's On: " + hot.scripts;
+        assert Boolean.FALSE.equals(host4.switches.get("picture")) : "picture stays off";
+        plugin4.stop();
+
+        // Lit from the remote long after a start (no guard): the On is reported, the note cleared.
+        FakeShell remote = new FakeShell();
+        remote.pollAnswer = darkAt(27, 23).replace("light=false", "light=false\nls=AT+LightSource=On");
+        FakeHost host5 = new FakeHost();
+        AuroraPlugin plugin5 = new AuroraPlugin(remote, null);
+        plugin5.start(host5, settings("Direct", 30));
+        waitFor(host5, "picture");
+        assert Boolean.TRUE.equals(host5.switches.get("picture")) : "a lit laser nobody here held off is reported on";
+        assert remote.scripts.contains(Projector.reflagLightScript(true)) : "flags brought in line";
+        plugin5.stop();
 
         // The same dark without the note (the power menu, the sleep timer) is only recorded.
         FakeShell other = new FakeShell();
