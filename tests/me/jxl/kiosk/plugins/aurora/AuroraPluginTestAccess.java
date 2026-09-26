@@ -16,7 +16,7 @@ public final class AuroraPluginTestAccess {
     static final String POLL_ANSWER =
         "light=true\nscreenoff=false\nsource=6\nmode=8\nminutes=1530\n"
         + "temps=AT+Temperature#NtcRedLaser1:28,NtcGreenLaser1:25,NtcBlueLaser1:34,NtcCw1:33,NtcDmd1:37,NtcEnv1:23\nleds=0\n"
-        + "boot=5\ncec=true\nsleep=0\nnosignal=0\nwdt=40\n";
+        + "fan=Thermal speed:40\nboot=5\ncec=true\nsleep=0\nnosignal=0\nwdt=40\n";
 
     /** Records every script and answers the poll with a canned projector. */
     static final class FakeShell implements Shell.Runner {
@@ -64,7 +64,7 @@ public final class AuroraPluginTestAccess {
         publication();
         commands();
         observed();
-        counter();
+        heat();
         guard();
         framework();
         fallback();
@@ -125,6 +125,7 @@ public final class AuroraPluginTestAccess {
         Projector.State s = Projector.parse(POLL_ANSWER);
         assert Boolean.TRUE.equals(s.light) && Boolean.FALSE.equals(s.screenOff) : "flags";
         assert s.laserWdt == 40 : "wdt";
+        assert s.fanPercent == 40 : "fan";
         assert "HDMI 2".equals(s.input()) : "input " + s.input();
         assert "Cinema Pro".equals(s.pictureModeLabel()) : "mode";
         assert s.laserMinutes == 1530L : "minutes";
@@ -161,6 +162,7 @@ public final class AuroraPluginTestAccess {
         waitFor(host, "picture");
         assert shell.scripts.contains(Projector.STAY_ON_SCRIPT) : "stay-on guards applied at start";
         assert Boolean.TRUE.equals(host.binary.get("stays_on")) : "stays on";
+        assert Double.valueOf(40).equals(host.sensors.get("fan_speed")) : "fan speed published: " + host.sensors.get("fan_speed");
         assert Boolean.TRUE.equals(host.switches.get("picture")) : "switch from light flag";
         assert "HDMI 2".equals(host.selects.get("input")) : "input select";
         assert "Cinema Pro".equals(host.selects.get("picture_mode")) : "mode select";
@@ -285,26 +287,42 @@ public final class AuroraPluginTestAccess {
         plugin.stop();
     }
 
-    /** The flag says dark but the HAL's minute counter keeps moving: the laser is on. */
-    static void counter() throws Exception {
+    /** A poll answer with the flags dark and the blue laser / ambient at these temperatures. */
+    static String darkAt(int blue, int ambient) {
+        return POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=true")
+            .replace("NtcBlueLaser1:34", "NtcBlueLaser1:" + blue).replace("NtcEnv1:23", "NtcEnv1:" + ambient);
+    }
+
+    /** The flags say dark but the laser is warming: it was lit behind their back. The counter,
+     *  which climbs with the laser cold, decides nothing. */
+    static void heat() throws Exception {
+        Projector.State cold = parseWith(27, 23), hot = parseWith(53, 23), cooling = parseWith(45, 23);
+        assert Boolean.FALSE.equals(Projector.laserLit(cold, 28.0)) : "near ambient is dark";
+        assert Boolean.TRUE.equals(Projector.laserLit(hot, 53.0)) : "hot and steady is lit";
+        assert Projector.laserLit(hot, null) == null : "no trend on the first read";
+        assert Projector.laserLit(cooling, 53.0) == null : "hot and cooling defers to the flag";
+        assert Projector.laserLit(parseWith(33, 23), 30.0) == null : "the band between defers";
+        assert Projector.laserLit(Projector.parse("light=false\nscreenoff=true\n"), 30.0) == null : "no log, no say";
+
         FakeShell shell = new FakeShell();
-        shell.pollAnswer = POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=true").replace("wdt=40", "wdt=40");
+        shell.pollAnswer = darkAt(27, 23);
         FakeHost host = new FakeHost();
         AuroraPlugin plugin = new AuroraPlugin(shell, null);
         plugin.start(host, settings("Direct", 30));
         waitFor(host, "picture");
-        assert Boolean.FALSE.equals(host.switches.get("picture")) : "flag trusted at first";
-        refreshWith(plugin, shell, "wdt=41");
-        assert Boolean.FALSE.equals(host.switches.get("picture")) : "one tick is the minute folded in after a dark, not the laser";
-        assert !shell.scripts.contains(Projector.reflagLightScript(true)) : "no re-flag on one tick";
-        refreshWith(plugin, shell, "wdt=42");
-        assert Boolean.TRUE.equals(host.switches.get("picture")) : "a climbing counter means on: " + host.switches.get("picture");
+        assert Boolean.FALSE.equals(host.switches.get("picture")) : "dark and cold";
+        refreshAnswer(plugin, shell, darkAt(27, 23).replace("wdt=40", "wdt=41"));
+        refreshAnswer(plugin, shell, darkAt(27, 23).replace("wdt=40", "wdt=42"));
+        assert Boolean.FALSE.equals(host.switches.get("picture")) : "a climbing counter is not the laser";
+        refreshAnswer(plugin, shell, darkAt(40, 23));
+        assert Boolean.TRUE.equals(host.switches.get("picture")) : "warming well over ambient means lit: " + host.switches.get("picture");
         assert shell.scripts.contains(Projector.reflagLightScript(true)) : "flag brought in line";
         assert shell.scripts.contains(Projector.ledsScript(Projector.LED_OFF)) : "bar off when the laser is found on";
         plugin.stop();
 
-        // Picture off from Home Assistant: the trailing tick and the save's reset to 0 leave it dark.
+        // Picture off from Home Assistant while the laser is still hot and the log line is old.
         FakeShell after = new FakeShell();
+        after.pollAnswer = POLL_ANSWER.replace("NtcBlueLaser1:34", "NtcBlueLaser1:53");
         FakeHost host2 = new FakeHost();
         AuroraPlugin dark = new AuroraPlugin(after, null);
         dark.start(host2, settings("Direct", 30));
@@ -313,13 +331,18 @@ public final class AuroraPluginTestAccess {
         off.put("on", false);
         dark.onEvent("switch.picture", off);
         waitScripts(after, after.scripts.size() + 1);
-        after.pollAnswer = POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=true");
-        refreshWith(dark, after, "wdt=40");
-        refreshWith(dark, after, "wdt=41");
-        refreshWith(dark, after, "wdt=0");
-        assert Boolean.FALSE.equals(host2.switches.get("picture")) : "stays dark through the tick and the reset";
-        assert !after.scripts.contains(Projector.reflagLightScript(true)) : "never re-lit by the counter";
+        refreshAnswer(dark, after, darkAt(53, 23));
+        refreshAnswer(dark, after, darkAt(53, 23));
+        assert Boolean.FALSE.equals(host2.switches.get("picture")) : "a stale hot reading after the command does not re-light it";
+        assert !after.scripts.contains(Projector.reflagLightScript(true)) : "never re-flagged on";
         dark.stop();
+    }
+
+    static Projector.State parseWith(int blue, int ambient) { return Projector.parse(darkAt(blue, ambient)); }
+
+    static void refreshAnswer(AuroraPlugin plugin, FakeShell shell, String answer) throws Exception {
+        shell.pollAnswer = answer;
+        refreshWith(plugin, shell, "wdt=40");
     }
 
     /** Sets the counter in the canned answer, refreshes, and waits for the read to land. */

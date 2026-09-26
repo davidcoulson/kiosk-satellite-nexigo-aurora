@@ -62,13 +62,14 @@ appears in Home Assistant as an ESPHome device. This plugin adds the projector t
 
 | Entity | Kind | What it does |
 | --- | --- | --- |
-| **Picture** | switch | The screen-off recipe above. Off: laser and fans stop, Android stays awake. On: back in a second. State is read back from `cur.appo.light.enabled`, which every path on the projector (power menu, remote key, sleep timer) keeps in step. |
+| **Picture** | switch | The screen-off recipe above. Off: laser and fans stop, Android stays awake. On: back in a second. State is read back from `cur.appo.light.enabled`, which every path on the projector (power menu, remote key, sleep timer) keeps in step, and checked against the laser's heat: a blue laser well over ambient and not cooling is lit, one near ambient is dark (the HAL's minute counter climbs with the laser cold and is not used). |
 | **Input** | select | HDMI 1-4, through the TV input framework. Reads back from `cur.prj.currentSourceId`. |
 | **Picture mode** | select | Cinema Home, Cinema Pro, Standard, Brightest, Game, Custom (`picture_mode`). Read through the framework; written through the framework when Kiosk Satellite holds `WRITE_SECURE_SETTINGS`, else through Shizuku. |
 | **Screen off** | binary sensor | `cur.prj.screenOff`: the dark is deliberate. |
 | **Stays on when the source sleeps** | binary sensor | Every guard in place: CEC standby ignored, the vendor sleep timer off (`persist.prj.sleepMode` 0; it shipped on and stands the projector by after about two hours) and the no-signal shutdown off. The plugin sets them at start and again on any read that finds one changed (the no-signal setting needs the shell user: ADB, Shizuku or the permission above). |
 | **Laser hours** | sensor | The lifetime light-source counter from the HAL's own store (`getPlatformProperty used_time`, minutes; the value the projector's menu shows). |
-| **Red/Green/Blue laser, Colour wheel, DMD, Ambient temperature** | sensors | The light engine's NTCs, from its 30-second report in the log. Only with Shizuku (reading the log needs the shell user); a temperature is published once it has been seen. |
+| **Red/Green/Blue laser, Colour wheel, DMD, Ambient temperature** | sensors | The light engine's NTCs, from its 30-second report in the log. Needs the shell user to read the log: the loopback ADB channel or Shizuku; a temperature is published once it has been seen. |
+| **Fan speed** | sensor | The speed the vendor's thermal daemon commands, in percent, from the same log (one value drives every fan PWM; the fans have no tachometer). |
 
 | **Front LEDs** | select | Off, Standby, Power on, Loop, Bluetooth, Update: the bar's patterns (`setAppoLeds 2 <status>`, verified). By default the bar follows the picture: standby lights while it is dark, nothing while it shows. |
 

@@ -57,17 +57,10 @@ public final class AuroraPlugin implements KioskPlugin {
     /** The light state the last read reported, so the bar can follow changes made elsewhere
      *  (a remote key re-lights a screen-off projector; the power menu darkens it). */
     private Boolean observedLight;
-    /** The laser minute counter's last value and when it was last seen to move. The flags say
-     *  what was asked; the counter says what the light engine is doing. */
-    private Integer lastWdt;
-    private long wdtMovedAt;
-    private long wdtSeenAt;
-    /** The last two times the counter went up. One rise is not a lit laser: the HAL folds in the
-     *  minute that was running when the light went out, so a single tick follows every dark. */
-    private long wdtRoseAt;
-    private long wdtRoseBefore;
-    /** No movement for this long while polling means the laser is off. Two minute ticks. */
-    static final long LASER_QUIET_MS = 150_000L;
+    /** The blue laser's last reading, for its trend; and when a picture command last went out. */
+    private Double lastBlue;
+    private volatile long pictureCommandAt;
+    private boolean fanPublished;
     /** What cur.prj.currentSourceId said when that input was commanded; a later change means
      *  the projector's own menu was used and wins. */
     private Integer sourceAtCommand;
@@ -144,8 +137,8 @@ public final class AuroraPlugin implements KioskPlugin {
         final String script;
         switch (command) {
             case "settings": script = Projector.openSettingsScript(); break;
-            case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; ledsForPicture(false); forgetCounter(); break;
-            case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; ledsForPicture(true); forgetCounter(); break;
+            case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; ledsForPicture(false); settleLight(); break;
+            case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; ledsForPicture(true); settleLight(); break;
             // One button for a remote key: dark when the picture shows, on otherwise (an unknown
             // light is treated as off, since that is the state a key press is meant to end).
             case "pictureToggle": execute(Boolean.TRUE.equals(lastLight) ? "pictureOff" : "pictureOn", arguments); return;
@@ -175,9 +168,9 @@ public final class AuroraPlugin implements KioskPlugin {
         if (Boolean.TRUE.equals(settings.get("ledsFollowPicture"))) leds(pictureOn ? "Off" : "Standby");
     }
 
-    /** After a picture command from here the flag is the truth again until the counter has had
-     *  time to agree or disagree. */
-    private void forgetCounter() { lastWdt = null; wdtMovedAt = 0; wdtSeenAt = 0; wdtRoseAt = 0; wdtRoseBefore = 0; }
+    /** After a picture command from here the flag is the truth until the laser has had time to
+     *  warm or cool. */
+    private void settleLight() { pictureCommandAt = System.currentTimeMillis(); }
 
     /** The light as last published, for the toggle. */
     private volatile Boolean lastLight;
@@ -199,7 +192,7 @@ public final class AuroraPlugin implements KioskPlugin {
             script = Projector.pictureScript((Boolean) on);
             commandedPictureOff = !(Boolean) on;
             ledsForPicture((Boolean) on);
-            forgetCounter();
+            settleLight();
         } else if (event.equals("select.input")) {
             Integer hw = Projector.idFor(Projector.INPUTS, Projector.INPUT_IDS, payload.get("option"));
             if (hw == null) throw new IllegalArgumentException("Unknown input");
@@ -315,7 +308,11 @@ public final class AuroraPlugin implements KioskPlugin {
         // reads that one line.
         if (s.temperatures.isEmpty() && extra != null) {
             Shell.Result more = extra.run(Projector.TEMPS_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
-            if (more.ok()) s.temperatures.putAll(Projector.parse(more.stdout).temperatures);
+            if (more.ok()) {
+                Projector.State log = Projector.parse(more.stdout);
+                s.temperatures.putAll(log.temperatures);
+                if (s.fanPercent == null) s.fanPercent = log.fanPercent;
+            }
         }
         // The settings command answers only the shell user; from the kiosk process the framework
         // answers instead, and it wins whenever it has a value.
@@ -324,26 +321,20 @@ public final class AuroraPlugin implements KioskPlugin {
         fill(s, "no_signal_auto_power_off", "nosignal");
         // The flags only record what was asked through the vendor's own code path; the TV app can
         // light the laser straight through the HAL and leave cur.appo.light.enabled at false. The
-        // HAL's minute counter runs while the light is lit or flagged lit (on 2026-09-26 it
-        // climbed with the flag on and the laser cold), so a re-flag to on would keep itself
-        // true: it counts as on only when climbing, never on one tick. A counter that has sat
-        // still through two ticks means off; anything in between defers to the flag.
+        // laser's own heat is the readback: the blue laser runs ~30 °C over ambient when lit and
+        // settles near ambient when dark. The HAL's minute counter looked like one and is not (on
+        // 2026-09-26 it climbed every minute with the laser cold and re-lit the picture twice).
         long now = System.currentTimeMillis();
-        if (s.laserWdt != null) {
-            if (lastWdt != null && !s.laserWdt.equals(lastWdt)) wdtMovedAt = now;
-            if (lastWdt != null && s.laserWdt > lastWdt) { wdtRoseBefore = wdtRoseAt; wdtRoseAt = now; }
-            if (lastWdt == null) wdtSeenAt = now;
-            lastWdt = s.laserWdt;
-            // Lit takes two rises, the older within a save cycle: a single tick (the minute
-            // folded in after a dark) or a reset to 0 (the HAL saving) is not the laser.
-            boolean climbing = wdtRoseBefore > 0 && now - wdtRoseBefore < 2 * LASER_QUIET_MS && now - wdtRoseAt < LASER_QUIET_MS;
-            Boolean counterSays = climbing ? Boolean.TRUE
-                : (now - wdtMovedAt >= LASER_QUIET_MS && wdtSeenAt > 0 && now - wdtSeenAt >= LASER_QUIET_MS ? Boolean.FALSE : null);
-            if (counterSays != null && !counterSays.equals(s.light)) {
-                s.light = counterSays;
-                if (counterSays) { s.screenOff = Boolean.FALSE; commandedPictureOff = false; }
-                runner.run(Projector.reflagLightScript(counterSays), 4000);
-            }
+        Double blue = s.temperatures.get(Projector.LASER_NTC);
+        Boolean heatSays = Projector.laserLit(s, lastBlue);
+        if (blue != null) lastBlue = blue;
+        // The log line can be 30 s old and a laser takes a minute to warm or cool: right after a
+        // picture command the flag is the truth.
+        if (now - pictureCommandAt < Projector.LASER_SETTLE_MS) heatSays = null;
+        if (heatSays != null && !heatSays.equals(s.light)) {
+            s.light = heatSays;
+            if (heatSays) { s.screenOff = Boolean.FALSE; commandedPictureOff = false; }
+            runner.run(Projector.reflagLightScript(heatSays), 4000);
         }
         // Android waking its display (a Kiosk Satellite restart does it) clears cur.prj.screenOff
         // while the light stays off. The flag is what tells the vendor's services the dark is
@@ -380,6 +371,12 @@ public final class AuroraPlugin implements KioskPlugin {
         host.publishBinarySensor("screen_off", "Screen off", "", s.screenOff);
         host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1),
             s.laserMinutes == null ? null : s.laserMinutes / 60.0);
+        // The speed appothermal commands (the same on every fan PWM); the fans have no tachometer.
+        if (s.fanPercent != null || fanPublished) {
+            host.publishSensor("fan_speed", "Fan speed", sensorMeta("%", null, "measurement", 0),
+                s.fanPercent == null ? null : s.fanPercent.doubleValue());
+            fanPublished = true;
+        }
         for (String[] t : Projector.TEMPERATURES) {
             Double value = s.temperatures.get(t[0]);
             // Only publish a temperature the projector has ever reported, so a channel that cannot
@@ -412,7 +409,7 @@ public final class AuroraPlugin implements KioskPlugin {
     private static Map<String, Object> sensorMeta(String unit, String deviceClass, String stateClass, int decimals) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("unit", unit);
-        m.put("deviceClass", deviceClass);
+        if (deviceClass != null) m.put("deviceClass", deviceClass);
         m.put("stateClass", stateClass);
         m.put("accuracyDecimals", decimals);
         return m;

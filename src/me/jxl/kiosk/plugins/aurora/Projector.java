@@ -105,8 +105,11 @@ final class Projector {
             : "setprop cur.appo.light.enabled false";
     }
 
-    /** The log line alone, for a shell-user channel behind a direct one. */
-    static final String TEMPS_SCRIPT = "echo \"temps=$(logcat -d -t 600 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\"";
+    /** appothermal's commanded fan speed, logged with every temperature read (every 30 s). */
+    static final String FAN_LINE = " echo \"fan=$(logcat -d -t 1500 2>/dev/null | grep -oE 'Thermal speed:[0-9]+' | tail -1)\"";
+
+    /** The log lines alone, for a shell-user channel behind a direct one. */
+    static final String TEMPS_SCRIPT = "echo \"temps=$(logcat -d -t 600 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\";" + FAN_LINE;
 
     /** Proves a loopback ADB session is the shell user, which is the point of it. */
     static final String ADB_PROBE_SCRIPT = "id";
@@ -136,11 +139,38 @@ final class Projector {
         + " echo \"minutes=$(" + TOOL + " getPlatformProperty used_time 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
         + " echo \"wdt=$(" + TOOL + " getPlatformProperty laser_used_time_wdt 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
         + " echo \"temps=$(logcat -d -t 600 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\";"
+        + FAN_LINE + ";"
         + " echo \"leds=$(cat /sys/class/appo_led_pwm_pm/appo_led_pwm_pm/led_pwm 2>/dev/null)\";"
         + " echo \"boot=$(settings get global boot_source_id 2>/dev/null)\";"
         + " echo \"cec=$(getprop persist.appo.ignore.cec.standby)\";"
         + " echo \"sleep=$(getprop persist.prj.sleepMode)\";"
         + " echo \"nosignal=$(settings get global no_signal_auto_power_off 2>/dev/null)\"";
+
+    /** The sensor that tells a lit laser: the blue laser runs ~53 °C lit and 26-28 °C dark in a
+     *  22-23 °C room (2026-09-25/26). */
+    static final String LASER_NTC = "NtcBlueLaser1";
+    static final String AMBIENT_NTC = "NtcEnv1";
+    /** Over ambient by this much and not cooling: lit. */
+    static final double LIT_OVER_AMBIENT = 12;
+    /** Within this much of ambient: dark. Between the two, or hot and cooling, the flag decides. */
+    static final double DARK_OVER_AMBIENT = 8;
+    /** How long after a picture command the heat is not trusted: the log line can be 30 s old and
+     *  the laser takes a minute or more to warm or cool across the thresholds. */
+    static final long LASER_SETTLE_MS = 180_000L;
+
+    /**
+     * What the laser's heat says about the light: true when well over ambient and not cooling
+     * (a trend needs the previous reading, so the first read never says lit), false when back
+     * near ambient, null when it cannot tell (no log, the band between, or hot and cooling).
+     */
+    static Boolean laserLit(State s, Double previousBlue) {
+        Double blue = s.temperatures.get(LASER_NTC), ambient = s.temperatures.get(AMBIENT_NTC);
+        if (blue == null || ambient == null) return null;
+        double over = blue - ambient;
+        if (over <= DARK_OVER_AMBIENT) return Boolean.FALSE;
+        if (over >= LIT_OVER_AMBIENT && previousBlue != null && blue >= previousBlue) return Boolean.TRUE;
+        return null;
+    }
 
     /** The light engine's NTC names as the HAL logs them, and the entity keys they become. */
     static final String[][] TEMPERATURES = {
@@ -167,14 +197,16 @@ final class Projector {
         Integer sourceId;
         Integer pictureMode;
         Long laserMinutes;
-        /** The HAL's minute counter since it last saved the hours. It runs while the light is lit
-         *  or flagged lit, so it catches a laser lit behind the flags' back but echoes the flag. */
+        /** The HAL's minute counter since it last saved the hours. Read for the record only: it
+         *  climbs with the laser cold, so it says nothing about the light. */
         Integer laserWdt;
         Integer ledPwm;
         Integer bootSourceId;
         Boolean ignoreCecStandby;
         Integer noSignalOff;
         Integer sleepMode;
+        /** appothermal's commanded fan speed in percent. */
+        Integer fanPercent;
         final Map<String, Double> temperatures = new LinkedHashMap<>();
 
         /** The vendor sets cur.prj.currentSourceId only from its own source menu; after a boot it
@@ -222,6 +254,7 @@ final class Projector {
                 case "cec": s.ignoreCecStandby = bool(value); break;
                 case "nosignal": s.noSignalOff = integer(value); break;
                 case "sleep": s.sleepMode = integer(value); break;
+                case "fan": s.fanPercent = integer(value.substring(value.indexOf(':') + 1)); break;
                 case "temps": parseTemperatures(value, s); break;
                 default: break;
             }
