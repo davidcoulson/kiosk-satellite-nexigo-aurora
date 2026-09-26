@@ -62,6 +62,10 @@ public final class AuroraPlugin implements KioskPlugin {
     private Integer lastWdt;
     private long wdtMovedAt;
     private long wdtSeenAt;
+    /** The last two times the counter went up. One rise is not a lit laser: the HAL folds in the
+     *  minute that was running when the light went out, so a single tick follows every dark. */
+    private long wdtRoseAt;
+    private long wdtRoseBefore;
     /** No movement for this long while polling means the laser is off. Two minute ticks. */
     static final long LASER_QUIET_MS = 150_000L;
     /** What cur.prj.currentSourceId said when that input was commanded; a later change means
@@ -173,7 +177,7 @@ public final class AuroraPlugin implements KioskPlugin {
 
     /** After a picture command from here the flag is the truth again until the counter has had
      *  time to agree or disagree. */
-    private void forgetCounter() { lastWdt = null; wdtMovedAt = 0; wdtSeenAt = 0; }
+    private void forgetCounter() { lastWdt = null; wdtMovedAt = 0; wdtSeenAt = 0; wdtRoseAt = 0; wdtRoseBefore = 0; }
 
     /** The light as last published, for the toggle. */
     private volatile Boolean lastLight;
@@ -280,9 +284,13 @@ public final class AuroraPlugin implements KioskPlugin {
         // is the one thing Shizuku cannot do for itself without root.
         Shell.Runner shellUser = runner == adb ? runner : (extra == adb ? extra : null);
         if (shellUser != null && Boolean.TRUE.equals(settings.get("startShizuku"))) shellUser.run(Projector.SHIZUKU_START_SCRIPT, 15000);
-        if (Boolean.TRUE.equals(settings.get("stayOn"))) runner.run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
+        if (Boolean.TRUE.equals(settings.get("stayOn"))) guardRunner().run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         poll();
     }
+
+    /** The stay-on guard writes a secure setting, which the shell user may and the kiosk process
+     *  may not: behind a direct channel the shell-user one does it. */
+    private Shell.Runner guardRunner() { return extra != null ? extra : runner; }
 
     private static boolean adbOk(Shell.Runner adb) {
         Shell.Result r = adb.run(Projector.ADB_PROBE_SCRIPT, 4000);
@@ -316,16 +324,21 @@ public final class AuroraPlugin implements KioskPlugin {
         fill(s, "no_signal_auto_power_off", "nosignal");
         // The flags only record what was asked through the vendor's own code path; the TV app can
         // light the laser straight through the HAL and leave cur.appo.light.enabled at false. The
-        // HAL's minute counter cannot lie: it moves only while the laser is lit. A counter that
-        // moved recently means on; one that has sat still through two ticks means off; anything
-        // in between defers to the flag.
+        // HAL's minute counter runs while the light is lit or flagged lit (on 2026-09-26 it
+        // climbed with the flag on and the laser cold), so a re-flag to on would keep itself
+        // true: it counts as on only when climbing, never on one tick. A counter that has sat
+        // still through two ticks means off; anything in between defers to the flag.
         long now = System.currentTimeMillis();
         if (s.laserWdt != null) {
             if (lastWdt != null && !s.laserWdt.equals(lastWdt)) wdtMovedAt = now;
+            if (lastWdt != null && s.laserWdt > lastWdt) { wdtRoseBefore = wdtRoseAt; wdtRoseAt = now; }
             if (lastWdt == null) wdtSeenAt = now;
             lastWdt = s.laserWdt;
-            Boolean counterSays = now - wdtMovedAt < LASER_QUIET_MS ? Boolean.TRUE
-                : (wdtSeenAt > 0 && now - wdtSeenAt >= LASER_QUIET_MS ? Boolean.FALSE : null);
+            // Lit takes two rises, the older within a save cycle: a single tick (the minute
+            // folded in after a dark) or a reset to 0 (the HAL saving) is not the laser.
+            boolean climbing = wdtRoseBefore > 0 && now - wdtRoseBefore < 2 * LASER_QUIET_MS && now - wdtRoseAt < LASER_QUIET_MS;
+            Boolean counterSays = climbing ? Boolean.TRUE
+                : (now - wdtMovedAt >= LASER_QUIET_MS && wdtSeenAt > 0 && now - wdtSeenAt >= LASER_QUIET_MS ? Boolean.FALSE : null);
             if (counterSays != null && !counterSays.equals(s.light)) {
                 s.light = counterSays;
                 if (counterSays) { s.screenOff = Boolean.FALSE; commandedPictureOff = false; }
@@ -337,6 +350,12 @@ public final class AuroraPlugin implements KioskPlugin {
         // deliberate, so when this plugin turned the picture off it puts the flag back.
         if (commandedPictureOff && Boolean.FALSE.equals(s.light) && Boolean.FALSE.equals(s.screenOff)) {
             if (runner.run(Projector.REFLAG_SCREEN_OFF_SCRIPT, 4000).ok()) s.screenOff = Boolean.TRUE;
+        }
+        // A guard that slipped (the projector's own menu, a factory default after an update) is
+        // put back here, not only at start: standby takes the network with it. The read after
+        // this one says whether it held.
+        if (Boolean.TRUE.equals(settings.get("stayOn")) && Boolean.FALSE.equals(s.staysOn())) {
+            guardRunner().run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         }
         publish(s);
     }
@@ -379,8 +398,10 @@ public final class AuroraPlugin implements KioskPlugin {
         if (dmd != null) text.append(String.format(Locale.ROOT, " · DMD %.0f °C", dmd));
         if (Boolean.TRUE.equals(settings.get("stayOn")) && Boolean.FALSE.equals(s.staysOn())) {
             text.append(s.noSignalOff != null && s.noSignalOff != Projector.NO_SIGNAL_OFF
-                ? " · no-signal shutdown still on (needs Shizuku or `pm grant ... WRITE_SECURE_SETTINGS` once)"
-                : " · CEC standby not ignored yet");
+                ? " · no-signal shutdown still on (needs ADB, Shizuku or `pm grant ... WRITE_SECURE_SETTINGS` once)"
+                : s.sleepMode != null && s.sleepMode != Projector.SLEEP_OFF
+                    ? " · sleep timer still on"
+                    : " · CEC standby not ignored yet");
         }
         text.append(" · via ").append(channelName);
         if (extraName != null) text.append(" (+").append(extraName).append(" for the log)");

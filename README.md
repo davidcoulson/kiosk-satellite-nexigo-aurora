@@ -66,7 +66,7 @@ appears in Home Assistant as an ESPHome device. This plugin adds the projector t
 | **Input** | select | HDMI 1-4, through the TV input framework. Reads back from `cur.prj.currentSourceId`. |
 | **Picture mode** | select | Cinema Home, Cinema Pro, Standard, Brightest, Game, Custom (`picture_mode`). Read through the framework; written through the framework when Kiosk Satellite holds `WRITE_SECURE_SETTINGS`, else through Shizuku. |
 | **Screen off** | binary sensor | `cur.prj.screenOff`: the dark is deliberate. |
-| **Stays on when the source sleeps** | binary sensor | Both guards in place: CEC standby ignored and the no-signal shutdown off. The plugin sets them at start (the no-signal setting needs the permission above). |
+| **Stays on when the source sleeps** | binary sensor | Every guard in place: CEC standby ignored, the vendor sleep timer off (`persist.prj.sleepMode` 0; it shipped on and stands the projector by after about two hours) and the no-signal shutdown off. The plugin sets them at start and again on any read that finds one changed (the no-signal setting needs the shell user: ADB, Shizuku or the permission above). |
 | **Laser hours** | sensor | The lifetime light-source counter from the HAL's own store (`getPlatformProperty used_time`, minutes; the value the projector's menu shows). |
 | **Red/Green/Blue laser, Colour wheel, DMD, Ambient temperature** | sensors | The light engine's NTCs, from its 30-second report in the log. Only with Shizuku (reading the log needs the shell user); a temperature is published once it has been seen. |
 

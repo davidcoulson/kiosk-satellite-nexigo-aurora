@@ -20,7 +20,7 @@ Persisted (`persist.*`):
 
 | Property | Meaning |
 | --- | --- |
-| `persist.prj.sleepMode` | Sleep timer mode (0 off). |
+| `persist.prj.sleepMode` | Sleep timer mode (0 off). Shipped as 4 here and stood the projector by after ~2 h; the plugin keeps it 0. |
 | `persist.prj.stayawake` | Debug: never sleep. |
 | `persist.prj.laserType` (3), `persist.prj.screenType` (1), `persist.prj.initScreenType` | Hardware variant. |
 | `persist.prj.power_off_vol` | Volume restored at power off. |

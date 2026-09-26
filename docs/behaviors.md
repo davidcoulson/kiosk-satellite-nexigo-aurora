@@ -67,6 +67,12 @@ dismissed. Toggle it through the projector settings (`setIrBodyDetectOnOff` in t
 (a debug override that keeps it awake), a countdown dialog before it acts, and `cur.prj.ScreenOffFrom`
 = `SleepMode` when it turned the light off, so the key handler knows to restore it.
 
+This unit shipped with `persist.prj.sleepMode=4` and the timer on. On 2026-09-25 it stood the
+projector by (network gone, boot reason `shutdown` on the CEC wake) about two hours after the last
+activity. The service re-reads the property on every check (`isSleepModeOn()false ... stop timer`
+right after `setprop persist.prj.sleepMode 0`), so no restart is needed; the plugin's stay-on guard
+sets it to 0 and puts it back on any read that finds it changed.
+
 ## No-signal shutdown
 
 Seen in practice: with the picture off and the Apple TV left to fall asleep (its own idle timer),

@@ -16,7 +16,7 @@ public final class AuroraPluginTestAccess {
     static final String POLL_ANSWER =
         "light=true\nscreenoff=false\nsource=6\nmode=8\nminutes=1530\n"
         + "temps=AT+Temperature#NtcRedLaser1:28,NtcGreenLaser1:25,NtcBlueLaser1:34,NtcCw1:33,NtcDmd1:37,NtcEnv1:23\nleds=0\n"
-        + "boot=5\ncec=true\nnosignal=0\nwdt=40\n";
+        + "boot=5\ncec=true\nsleep=0\nnosignal=0\nwdt=40\n";
 
     /** Records every script and answers the poll with a canned projector. */
     static final class FakeShell implements Shell.Runner {
@@ -65,6 +65,7 @@ public final class AuroraPluginTestAccess {
         commands();
         observed();
         counter();
+        guard();
         framework();
         fallback();
         loopback();
@@ -134,9 +135,12 @@ public final class AuroraPluginTestAccess {
         assert empty.input() == null && empty.pictureModeLabel() == null && empty.laserMinutes == null && empty.temperatures.isEmpty() && empty.staysOn() == null : "unknowns";
         Projector.State dark = Projector.parse("source=-1\nboot=6\n");
         assert dark.sourceId == null && "HDMI 2".equals(dark.input()) : "-1 while the picture is off is not an input";
-        Projector.State booted = Projector.parse("source=\nboot=5\ncec=false\nnosignal=4\n");
+        Projector.State booted = Projector.parse("source=\nboot=5\ncec=false\nsleep=0\nnosignal=4\n");
         assert "HDMI 1".equals(booted.input()) && Boolean.FALSE.equals(booted.staysOn()) : "boot source and guards";
         assert Boolean.TRUE.equals(s.staysOn()) : "stays on";
+        Projector.State sleepy = Projector.parse(POLL_ANSWER.replace("sleep=0", "sleep=4"));
+        assert sleepy.sleepMode == 4 && Boolean.FALSE.equals(sleepy.staysOn()) : "the sleep timer breaks stays-on";
+        assert Projector.STAY_ON_SCRIPT.contains("setprop persist.prj.sleepMode 0") : "the guard turns the sleep timer off";
         Projector.State odd = Projector.parse("source=99\nmode=6\n");
         assert odd.sourceId == 99 && odd.input() == null && odd.pictureMode == 6 && odd.pictureModeLabel() == null : "unmapped ids stay unknown";
         assert Projector.pictureScript(false).equals(
@@ -290,13 +294,62 @@ public final class AuroraPluginTestAccess {
         plugin.start(host, settings("Direct", 30));
         waitFor(host, "picture");
         assert Boolean.FALSE.equals(host.switches.get("picture")) : "flag trusted at first";
-        shell.pollAnswer = shell.pollAnswer.replace("wdt=40", "wdt=41");
-        plugin.execute("refresh", Collections.<String, Object>emptyMap());
-        waitScripts(shell, shell.scripts.size() + 1);
-        Thread.sleep(200);
-        assert Boolean.TRUE.equals(host.switches.get("picture")) : "a moving counter means on: " + host.switches.get("picture");
+        refreshWith(plugin, shell, "wdt=41");
+        assert Boolean.FALSE.equals(host.switches.get("picture")) : "one tick is the minute folded in after a dark, not the laser";
+        assert !shell.scripts.contains(Projector.reflagLightScript(true)) : "no re-flag on one tick";
+        refreshWith(plugin, shell, "wdt=42");
+        assert Boolean.TRUE.equals(host.switches.get("picture")) : "a climbing counter means on: " + host.switches.get("picture");
         assert shell.scripts.contains(Projector.reflagLightScript(true)) : "flag brought in line";
         assert shell.scripts.contains(Projector.ledsScript(Projector.LED_OFF)) : "bar off when the laser is found on";
+        plugin.stop();
+
+        // Picture off from Home Assistant: the trailing tick and the save's reset to 0 leave it dark.
+        FakeShell after = new FakeShell();
+        FakeHost host2 = new FakeHost();
+        AuroraPlugin dark = new AuroraPlugin(after, null);
+        dark.start(host2, settings("Direct", 30));
+        waitFor(host2, "picture");
+        Map<String, Object> off = new HashMap<>();
+        off.put("on", false);
+        dark.onEvent("switch.picture", off);
+        waitScripts(after, after.scripts.size() + 1);
+        after.pollAnswer = POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=true");
+        refreshWith(dark, after, "wdt=40");
+        refreshWith(dark, after, "wdt=41");
+        refreshWith(dark, after, "wdt=0");
+        assert Boolean.FALSE.equals(host2.switches.get("picture")) : "stays dark through the tick and the reset";
+        assert !after.scripts.contains(Projector.reflagLightScript(true)) : "never re-lit by the counter";
+        dark.stop();
+    }
+
+    /** Sets the counter in the canned answer, refreshes, and waits for the read to land. */
+    static void refreshWith(AuroraPlugin plugin, FakeShell shell, String wdt) throws Exception {
+        shell.pollAnswer = shell.pollAnswer.replaceAll("wdt=\\d+", wdt);
+        int polls = pollCount(shell);
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        long deadline = System.currentTimeMillis() + 3000;
+        while (pollCount(shell) <= polls && System.currentTimeMillis() < deadline) Thread.sleep(20);
+        Thread.sleep(150);
+    }
+
+    static int pollCount(FakeShell shell) {
+        synchronized (shell.scripts) { return Collections.frequency(shell.scripts, Projector.POLL_SCRIPT); }
+    }
+
+    /** A sleep timer turned back on from the projector's menu is turned off again on the next read. */
+    static void guard() throws Exception {
+        FakeShell shell = new FakeShell();
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null);
+        plugin.start(host, settings("Direct", 30));
+        waitFor(host, "picture");
+        assert Boolean.TRUE.equals(host.binary.get("stays_on")) : "guarded";
+        int guards = Collections.frequency(shell.scripts, Projector.STAY_ON_SCRIPT);
+        shell.pollAnswer = POLL_ANSWER.replace("sleep=0", "sleep=4");
+        refreshWith(plugin, shell, "wdt=40");
+        assert Boolean.FALSE.equals(host.binary.get("stays_on")) : "slipped guard shows";
+        assert host.status.contains("sleep timer still on") : host.status;
+        assert Collections.frequency(shell.scripts, Projector.STAY_ON_SCRIPT) == guards + 1 : "guard re-applied on the read";
         plugin.stop();
     }
 

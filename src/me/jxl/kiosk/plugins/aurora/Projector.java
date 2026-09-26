@@ -78,13 +78,19 @@ final class Projector {
     /** No-signal shutdown off ("Close" in the projector's menu; 1-5 are 5, 10, 15, 30 and 60 min). */
     static final int NO_SIGNAL_OFF = 0;
 
+    /** The vendor sleep timer off. It shipped on (4 on this unit) and stood the projector by
+     *  about two hours after the last activity, which took it off the network on 2026-09-25. */
+    static final int SLEEP_OFF = 0;
+
     /**
      * Keep the projector on the network: ignore the CEC standby a sleeping source broadcasts
-     * (the Apple TV's "Control TVs and receivers" does), and turn off the no-signal shutdown.
-     * The property is the vendor's own switch; the setting needs WRITE_SECURE_SETTINGS, so it
-     * may fail on the direct channel and is reported from the read-back instead.
+     * (the Apple TV's "Control TVs and receivers" does), turn off the sleep timer, and turn off
+     * the no-signal shutdown. The properties are the vendor's own switches (its SleepmodeService
+     * reads the timer's on every check); the setting needs WRITE_SECURE_SETTINGS, so it may fail
+     * on the direct channel and is reported from the read-back instead.
      */
     static final String STAY_ON_SCRIPT = "setprop persist.appo.ignore.cec.standby true;"
+        + " setprop persist.prj.sleepMode " + SLEEP_OFF + ";"
         + " settings put global no_signal_auto_power_off " + NO_SIGNAL_OFF + " 2>/dev/null; true";
 
     /** Re-asserts the deliberate-dark flag alone; see AuroraPlugin.poll. */
@@ -133,6 +139,7 @@ final class Projector {
         + " echo \"leds=$(cat /sys/class/appo_led_pwm_pm/appo_led_pwm_pm/led_pwm 2>/dev/null)\";"
         + " echo \"boot=$(settings get global boot_source_id 2>/dev/null)\";"
         + " echo \"cec=$(getprop persist.appo.ignore.cec.standby)\";"
+        + " echo \"sleep=$(getprop persist.prj.sleepMode)\";"
         + " echo \"nosignal=$(settings get global no_signal_auto_power_off 2>/dev/null)\"";
 
     /** The light engine's NTC names as the HAL logs them, and the entity keys they become. */
@@ -160,22 +167,23 @@ final class Projector {
         Integer sourceId;
         Integer pictureMode;
         Long laserMinutes;
-        /** The HAL's minute counter since it last saved the hours: it moves only while the laser
-         *  is lit, which makes it the one honest readback of the light. */
+        /** The HAL's minute counter since it last saved the hours. It runs while the light is lit
+         *  or flagged lit, so it catches a laser lit behind the flags' back but echoes the flag. */
         Integer laserWdt;
         Integer ledPwm;
         Integer bootSourceId;
         Boolean ignoreCecStandby;
         Integer noSignalOff;
+        Integer sleepMode;
         final Map<String, Double> temperatures = new LinkedHashMap<>();
 
         /** The vendor sets cur.prj.currentSourceId only from its own source menu; after a boot it
          *  is the boot source until then. */
         String input() { return label(INPUTS, INPUT_IDS, sourceId != null ? sourceId : bootSourceId); }
-        /** Both guards in place: CEC standby ignored and the no-signal shutdown off. */
+        /** Every guard in place: CEC standby ignored, the sleep timer and the no-signal shutdown off. */
         Boolean staysOn() {
-            if (ignoreCecStandby == null || noSignalOff == null) return null;
-            return ignoreCecStandby && noSignalOff == NO_SIGNAL_OFF;
+            if (ignoreCecStandby == null || noSignalOff == null || sleepMode == null) return null;
+            return ignoreCecStandby && noSignalOff == NO_SIGNAL_OFF && sleepMode == SLEEP_OFF;
         }
         String pictureModeLabel() { return label(PICTURE_MODES, PICTURE_MODE_IDS, pictureMode); }
     }
@@ -213,6 +221,7 @@ final class Projector {
                 case "boot": s.bootSourceId = integer(value); break;
                 case "cec": s.ignoreCecStandby = bool(value); break;
                 case "nosignal": s.noSignalOff = integer(value); break;
+                case "sleep": s.sleepMode = integer(value); break;
                 case "temps": parseTemperatures(value, s); break;
                 default: break;
             }
