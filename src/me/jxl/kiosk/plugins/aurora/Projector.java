@@ -106,10 +106,14 @@ final class Projector {
     }
 
     /** appothermal's commanded fan speed, logged with every temperature read (every 30 s). */
-    static final String FAN_LINE = " echo \"fan=$(logcat -d -t 1500 2>/dev/null | grep -oE 'Thermal speed:[0-9]+' | tail -1)\"";
+    static final String FAN_LINE = " echo \"fan=$(logcat -d --pid=$(pidof appothermal) 2>/dev/null | grep -oE 'Thermal speed:[0-9]+' | tail -1)\"";
+
+    /** The light engine's 30-second temperature report. Read from the HAL service's own lines:
+     *  the log is chatty enough that the last few hundred lines often miss it. */
+    static final String TEMPS_LINE = "echo \"temps=$(logcat -d --pid=$(pidof vendor.appotronics.projectormanager@1.0-service) 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\";";
 
     /** The log lines alone, for a shell-user channel behind a direct one. */
-    static final String TEMPS_SCRIPT = "echo \"temps=$(logcat -d -t 600 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\";" + FAN_LINE;
+    static final String TEMPS_SCRIPT = TEMPS_LINE + FAN_LINE;
 
     /** Proves a loopback ADB session is the shell user, which is the point of it. */
     static final String ADB_PROBE_SCRIPT = "id";
@@ -138,7 +142,7 @@ final class Projector {
         + " echo \"mode=$(settings get global picture_mode 2>/dev/null)\";"
         + " echo \"minutes=$(" + TOOL + " getPlatformProperty used_time 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
         + " echo \"wdt=$(" + TOOL + " getPlatformProperty laser_used_time_wdt 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
-        + " echo \"temps=$(logcat -d -t 600 2>/dev/null | grep -oE 'AT\\+Temperature#[A-Za-z0-9:,]+' | tail -1)\";"
+        + " " + TEMPS_LINE
         + FAN_LINE + ";"
         + " echo \"leds=$(cat /sys/class/appo_led_pwm_pm/appo_led_pwm_pm/led_pwm 2>/dev/null)\";"
         + " echo \"boot=$(settings get global boot_source_id 2>/dev/null)\";"
