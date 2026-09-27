@@ -388,7 +388,10 @@ public final class AuroraPluginTestAccess {
         List<Projector.Cec> woke = Projector.parseCec(CEC_OLD + CEC_WAKE);
         List<Projector.Cec> fresh = Projector.newCec(old, woke);
         assert fresh.size() == 2 && fresh.get(0).wakes() && fresh.get(1).wakes() && fresh.get(1).port() == 1 : "new: " + fresh.size();
-        assert "02:58:36 Active Source from Playback 1 to all".equals(fresh.get(1).summary()) : fresh.get(1).summary();
+        assert "Active Source from Playback 1 to all".equals(fresh.get(1).summary(null)) : fresh.get(1).summary(null);
+        Map<Integer, String> names = Projector.cecNames("      CEC: logical_address: 0x04 device_type: 4 vendor_id: 4346 display_name: Apple TV power_status: 0 physical_address: 0x1000 port_id: 1\n");
+        assert "Image View On from Apple TV".equals(fresh.get(0).summary(names)) : fresh.get(0).summary(names);
+        assert !old.get(1).notable() && old.get(2).notable() : "power polling is not notable, Standby is";
         // The ring drops its oldest lines: the overlap is still found.
         List<Projector.Cec> rolled = Projector.parseCec(CEC_OLD.substring(CEC_OLD.indexOf('\n') + 1) + CEC_WAKE);
         assert Projector.newCec(old, rolled).isEmpty() == false && Projector.newCec(woke, rolled).isEmpty() : "rolled ring";
@@ -402,12 +405,12 @@ public final class AuroraPluginTestAccess {
         plugin.start(host, settings("Auto", 30));
         waitFor(host, "picture");
         waitUntil(new Check() { public boolean ok() { return host.texts.containsKey("cec"); } }, "baseline sensor");
-        assert "02:54:29 Standby from Playback 1 to all".equals(host.texts.get("cec")) : "baseline shows the newest: " + host.texts.get("cec");
+        assert "Standby from Apple TV to all".equals(host.texts.get("cec")) : "baseline shows the newest notable, named: " + host.texts.get("cec");
         assert !direct.scripts.contains(Projector.pictureScript(false)) && !direct.scripts.contains(Projector.pictureScript(true)) : "the baseline acts on nothing";
 
         adb.history = CEC_OLD + CEC_WAKE;
         waitUntil(new Check() { public boolean ok() { return direct.scripts.contains(Projector.pictureScript(true)); } }, "picture on after Image View On");
-        waitUntil(new Check() { public boolean ok() { return "02:58:36 Active Source from Playback 1 to all".equals(host.texts.get("cec")); } }, "sensor follows");
+        waitUntil(new Check() { public boolean ok() { return "Active Source from Apple TV to all".equals(host.texts.get("cec")); } }, "sensor follows");
         assert !direct.scripts.toString().contains("HW5") : "already on the TV app: no input switch";
 
         direct.pollAnswer = POLL_ANSWER;   // the picture now reads on
@@ -423,7 +426,7 @@ public final class AuroraPluginTestAccess {
         Thread.sleep(300);
         adb.foreground = APP_FRONT;
         adb.history = CEC_OLD + CEC_WAKE + CEC_SLEEP + CEC_SLEEP.replace("03:10:02", "03:20:02");
-        waitUntil(new Check() { public boolean ok() { return "03:20:02 Standby from Playback 1 to all".equals(host.texts.get("cec")); } }, "second standby seen");
+        Thread.sleep(3000);   // one read of the CEC history (every 2 s)
         Thread.sleep(200);
         assert Collections.frequency(direct.scripts, Projector.pictureScript(false)) == offs : "no dark while Projectivy is in front";
         plugin.execute("refresh", Collections.<String, Object>emptyMap());
@@ -442,6 +445,7 @@ public final class AuroraPluginTestAccess {
         Thread.sleep(2500);
         adb.history = adb.history + "    [R] time=2026-09-27 03:31:29 message=<Report Power Status> src: 4, dst: 0, params: 01\n";
         waitUntil(new Check() { public boolean ok() { return Collections.frequency(direct.scripts, Projector.pictureScript(false)) > offs2; } }, "picture off when the source reports standby");
+        waitUntil(new Check() { public boolean ok() { return "Apple TV went to standby".equals(host.texts.get("cec")); } }, "power change named: " + host.texts.get("cec"));
         plugin.stop();
     }
 

@@ -482,11 +482,41 @@ final class Projector {
             return p >= 1 && p <= 4 ? p : 0;
         }
 
-        /** Short form for the sensor: "02:58:36 Image View On from Playback 1". */
-        String summary() {
-            String clock = time.length() >= 8 ? time.substring(time.length() - 8) : time;
-            return clock + " " + name + " from " + deviceName(src) + (dst == 15 ? " to all" : "");
+        /** A message worth showing: sources waking, sleeping, switching inputs or passing remote
+         *  keys. The projector's own minute-by-minute power polling and the discovery chatter
+         *  (vendor id, CEC version, physical address) are not. */
+        boolean notable() {
+            return received && NOTABLE.contains(name);
         }
+
+        /** Sensor text: "Image View On from Apple TV". HA keeps the time. */
+        String summary(Map<Integer, String> names) {
+            return name + " from " + nameOf(src, names) + (dst == 15 ? " to all" : "");
+        }
+    }
+
+    static final java.util.Set<String> NOTABLE = new java.util.HashSet<>(java.util.Arrays.asList(
+        "Image View On", "Text View On", "Active Source", "Inactive Source", "Standby",
+        "Routing Change", "Request Active Source", "User Control Pressed",
+        "System Audio Mode Request", "Set System Audio Mode"));
+
+    /** A source's CEC name ("Apple TV") when the service knows it, else its role ("Playback 1"). */
+    static String nameOf(int logical, Map<Integer, String> names) {
+        String n = names == null ? null : names.get(logical);
+        return n != null && !n.isEmpty() ? n : deviceName(logical);
+    }
+
+    private static final Pattern CEC_NAME = Pattern.compile("logical_address: 0x([0-9A-Fa-f]+) .*?display_name: (.+?) power_status:");
+
+    /** CEC device names by logical address, from the service's device list. */
+    static Map<Integer, String> cecNames(String output) {
+        Map<Integer, String> out = new LinkedHashMap<>();
+        if (output == null) return out;
+        for (String line : output.split("\n")) {
+            Matcher m = CEC_NAME.matcher(line);
+            if (m.find()) out.put(Integer.parseInt(m.group(1), 16), m.group(2).trim());
+        }
+        return out;
     }
 
     /** CEC logical address names (HDMI-CEC 1.4, table 5). */

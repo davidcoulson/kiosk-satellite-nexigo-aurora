@@ -44,6 +44,8 @@ public final class AuroraPlugin implements KioskPlugin {
     private List<Projector.Cec> lastCec;
     /** Each source's last reported power (true on), by CEC logical address. */
     private final Map<Integer, Boolean> sourcePower = new HashMap<>();
+    /** CEC device names by logical address ("Apple TV"), refreshed with each read. */
+    private volatile Map<Integer, String> cecNames = new HashMap<>();
     /** The tiles and the Showing sensor as last published, so only changes go out. */
     private String lastProjectorTile, lastShowingTile;
     private boolean tilesSupported = true;
@@ -294,6 +296,8 @@ public final class AuroraPlugin implements KioskPlugin {
         Shell.Runner shellUser = runner == adb ? runner : (extra == adb ? extra : null);
         if (shellUser != null && Boolean.TRUE.equals(settings.get("startShizuku"))) shellUser.run(Projector.SHIZUKU_START_SCRIPT, 15000);
         if (Boolean.TRUE.equals(settings.get("stayOn"))) guardRunner().run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
+        // Known before the first read, so the Showing tile does not wait a poll.
+        cecRunner = "direct".equals(channelName) ? extra : runner;
         poll();
         watchCec();
     }
@@ -319,24 +323,28 @@ public final class AuroraPlugin implements KioskPlugin {
         List<Projector.Cec> fresh = first ? Collections.<Projector.Cec>emptyList() : Projector.newCec(lastCec, now);
         lastCec = now;
         if (first) {
-            // A start is a baseline: show the newest message, act on none of the old ones, and
-            // learn each source's last reported power.
+            // A start is a baseline: show the newest notable message, act on none of the old
+            // ones, and learn each source's last reported power.
             for (Projector.Cec c : now) if (c.powerReport() != null) sourcePower.put(c.src, c.powerReport());
             for (int i = now.size() - 1; i >= 0; i--) {
-                if (now.get(i).received) { host.publishTextSensor("cec", "Last CEC message", now.get(i).summary()); break; }
+                if (now.get(i).notable()) { host.publishTextSensor("cec", "Last CEC message", now.get(i).summary(cecNames)); break; }
             }
             return;
         }
         for (Projector.Cec c : fresh) {
             if (!c.received) continue;
-            host.publishTextSensor("cec", "Last CEC message", c.summary());
-            // The projector asks each source for its power every minute. A source that sleeps
-            // without sending Standby (the Apple TV put to sleep over the network) shows up here.
+            // The projector asks each source for its power every minute. Only a change is news,
+            // and a source that sleeps without sending Standby (the Apple TV put to sleep over the
+            // network) shows up here.
             Boolean power = c.powerReport();
             Boolean before = power == null ? null : sourcePower.put(c.src, power);
+            boolean powerChanged = before != null && !before.equals(power);
+            if (c.notable()) host.publishTextSensor("cec", "Last CEC message", c.summary(cecNames));
+            else if (powerChanged) host.publishTextSensor("cec", "Last CEC message",
+                Projector.nameOf(c.src, cecNames) + (power ? " woke up" : " went to standby"));
             if (Boolean.FALSE.equals(settings.get("followSource"))) continue;
             if (c.wakes()) sourceWoke(c);
-            else if (c.sleeps() || (Boolean.TRUE.equals(before) && Boolean.FALSE.equals(power))) sourceSlept();
+            else if (c.sleeps() || (powerChanged && Boolean.FALSE.equals(power))) sourceSlept();
         }
     }
 
@@ -376,7 +384,11 @@ public final class AuroraPlugin implements KioskPlugin {
         String showing = null;
         if (cecRunner != null) {
             Shell.Result r = cecRunner.run(Projector.SHOWING_SCRIPT, 4000);
-            if (r.ok()) showing = Projector.showing(Projector.foregroundPackage(r.stdout), s.input(), Projector.cecDevices(r.stdout));
+            if (r.ok()) {
+                showing = Projector.showing(Projector.foregroundPackage(r.stdout), s.input(), Projector.cecDevices(r.stdout));
+                Map<Integer, String> names = Projector.cecNames(r.stdout);
+                if (!names.isEmpty()) cecNames = names;
+            }
         }
         if (showing != null) host.publishTextSensor("showing", "Showing", showing);
         if (!tilesSupported) return;
