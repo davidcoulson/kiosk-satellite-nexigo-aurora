@@ -36,6 +36,13 @@ final class Adb {
     static final int MAX_DATA = 256 * 1024;
     /** The shell service carries no exit code of its own, so the script reports it on the last line. */
     static final String MARK = "__aurora_rc=";
+
+    /** The shell service line: the script, then the exit-code marker. A script that already ends
+     *  in ';' would make ';;', which the projector's shell rejects as a syntax error (0.3.3 lost
+     *  its temperatures to exactly that), so trailing separators are dropped first. */
+    static String shellService(String script) {
+        return "shell:" + script.replaceAll("[;\\s]+$", "") + "; echo " + MARK + "$?";
+    }
     private static final int OUTPUT_CAP = 262144;
 
     static Shell.Result run(String host, int port, String script, int timeoutMs) {
@@ -49,7 +56,7 @@ final class Adb {
             Packet p = read(in);
             if (p.cmd == A_AUTH) return Shell.Result.failure("adbd on " + host + ":" + port + " wants a key (ro.adb.secure is on)");
             if (p.cmd != A_CNXN) return Shell.Result.failure("adbd on " + host + ":" + port + " did not connect");
-            send(out, A_OPEN, 1, 0, ("shell:" + script + "; echo " + MARK + "$?\0").getBytes(StandardCharsets.UTF_8));
+            send(out, A_OPEN, 1, 0, (shellService(script) + "\0").getBytes(StandardCharsets.UTF_8));
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             while (true) {
                 p = read(in);

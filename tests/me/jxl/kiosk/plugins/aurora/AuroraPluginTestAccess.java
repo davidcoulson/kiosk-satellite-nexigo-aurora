@@ -133,6 +133,12 @@ public final class AuroraPluginTestAccess {
         assert Boolean.TRUE.equals(s.light) && Boolean.FALSE.equals(s.screenOff) : "flags";
         assert s.laserWdt == 40 : "wdt";
         assert s.fanPercent == 40 : "fan";
+        // Every script the loopback ADB channel runs must survive the exit-code marker appended to it.
+        assert Adb.shellService("echo a;").equals("shell:echo a; echo " + Adb.MARK + "$?") : Adb.shellService("echo a;");
+        for (String script : new String[] {Projector.POLL_SCRIPT, Projector.TEMPS_SCRIPT, Projector.CEC_SCRIPT,
+                Projector.SHOWING_SCRIPT, Projector.FOREGROUND_SCRIPT, Projector.STAY_ON_SCRIPT, Projector.SHIZUKU_START_SCRIPT}) {
+            assert !Adb.shellService(script).contains(";;") : "';;' in the ADB line for: " + script;
+        }
         long[] c0 = Projector.cpuTimes("cpu  100 0 50 800 50 0 0 0 0 0"), c1 = Projector.cpuTimes("cpu  130 0 70 1040 60 0 0 0 0 0");
         assert c0[0] == 150 && c0[1] == 1000 : "cpu times";
         assert Math.abs(Projector.cpuPercent(c0[0], c0[1], c1[0], c1[1]) - 50.0 / 3) < 1e-9 : "cpu busy: " + Projector.cpuPercent(c0[0], c0[1], c1[0], c1[1]);
