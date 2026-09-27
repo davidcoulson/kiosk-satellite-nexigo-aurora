@@ -3,7 +3,7 @@
   "apiVersion": 1,
   "id": "nexigo-aurora",
   "name": "NexiGo Aurora Pro",
-  "version": "0.2.10",
+  "version": "0.3.0",
   "minAndroidSdk": 24,
   "entryClass": "me.jxl.kiosk.plugins.aurora.AuroraPlugin",
   "description": "Runs on the NexiGo Aurora Pro projector's own Android and puts the projector on this kiosk's Home Assistant device: a Picture switch that blanks the laser the way the projector's power menu does (fans stop, Android stays awake, back in a second), Input and Picture mode selects, laser hours and light-engine temperatures, and buttons that open the projector's settings app (keystone, focus) and drive the front LED bar. Uses the vendor's projector-test tool and system properties; no root. Shizuku is optional and only adds the temperature readings.",
@@ -39,6 +39,14 @@
       "type": "boolean",
       "title": "Front LEDs follow the picture",
       "description": "The front bar shows the projector's standby lights while the picture is off and goes dark while it shows - whether the picture was changed here, by a remote key or by the projector's own menu. The Front LEDs select still sets any pattern by hand.",
+      "default": true,
+      "group": "Projector"
+    },
+    {
+      "key": "followSource",
+      "type": "boolean",
+      "title": "Picture follows the source (HDMI-CEC)",
+      "description": "Watches the projector's HDMI-CEC traffic: a source waking (Image View On, Active Source) turns the picture on and, when an app is in front, switches to its input; a source going to sleep (Standby) turns the picture off unless an app on the projector is in use. Needs the ADB or Shizuku channel. The last message received is always published as a sensor.",
       "default": true,
       "group": "Projector"
     },

@@ -50,7 +50,8 @@ public final class AuroraPluginTestAccess {
         @Override public void publishSelect(String key, String name, String[] options, String state) { selects.put(key, state); }
         @Override public void publishSensor(String key, String name, Map<String, Object> metadata, Double state) { sensors.put(key, state); }
         @Override public void publishBinarySensor(String key, String name, String deviceClass, Boolean state) { binary.put(key, state); }
-        @Override public void publishTextSensor(String key, String name, String state) {}
+        final Map<String, Object> texts = new LinkedHashMap<>();
+        @Override public void publishTextSensor(String key, String name, String state) { texts.put(key, state); }
         @Override public Map<String, Object> shizukuState() {
             Map<String, Object> m = new HashMap<>();
             m.put("granted", shizukuGranted);
@@ -66,6 +67,7 @@ public final class AuroraPluginTestAccess {
         observed();
         heat();
         restart();
+        cec();
         guard();
         framework();
         fallback();
@@ -349,6 +351,84 @@ public final class AuroraPluginTestAccess {
         assert Boolean.FALSE.equals(host2.switches.get("picture")) : "a stale hot reading after the command does not re-light it";
         assert !after.scripts.contains(Projector.reflagLightScript(true)) : "never re-flagged on";
         dark.stop();
+    }
+
+    static final String CEC_OLD =
+        "    [S] time=2026-09-27 02:54:20 message=<Give Device Power Status> src: 0, dst: 4\n"
+        + "    [R] time=2026-09-27 02:54:20 message=<Report Power Status> src: 4, dst: 0, params: 00\n"
+        + "    [R] time=2026-09-27 02:54:29 message=<Standby> src: 4, dst: 15\n";
+    static final String CEC_WAKE =
+        "    [R] time=2026-09-27 02:58:36 message=<Image View On> src: 4, dst: 0\n"
+        + "    [R] time=2026-09-27 02:58:36 message=<Active Source> src: 4, dst: 15, params: 10 00\n";
+    static final String CEC_SLEEP = "    [R] time=2026-09-27 03:10:02 message=<Standby> src: 4, dst: 15\n";
+    static final String TV_FRONT = "    mResumedActivity: ActivityRecord{5d0fb2b u0 com.mediatek.wwtv.tvcenter/.nav.TurnkeyUiMainActivity t633}\n";
+    static final String APP_FRONT = "    mResumedActivity: ActivityRecord{51cb830 u0 com.spocky.projengmenu/.ui.home.MainActivity t631}\n";
+
+    /** The projector's adbd answering the CEC history and the app in front. */
+    static final class CecAdb extends FakeAdb {
+        volatile String history = CEC_OLD;
+        volatile String foreground = TV_FRONT;
+        @Override public Shell.Result run(String script, int timeoutMs) {
+            if (script.equals(Projector.CEC_SCRIPT)) { scripts.add(script); return new Shell.Result(0, history, "", false); }
+            if (script.equals(Projector.FOREGROUND_SCRIPT)) { scripts.add(script); return new Shell.Result(0, foreground, "", false); }
+            return super.run(script, timeoutMs);
+        }
+    }
+
+    /** HDMI-CEC: the history parses, only new messages count, and the picture follows the source. */
+    static void cec() throws Exception {
+        List<Projector.Cec> old = Projector.parseCec(CEC_OLD);
+        assert old.size() == 3 && !old.get(0).received && old.get(2).sleeps() : "parse: " + old.size();
+        List<Projector.Cec> woke = Projector.parseCec(CEC_OLD + CEC_WAKE);
+        List<Projector.Cec> fresh = Projector.newCec(old, woke);
+        assert fresh.size() == 2 && fresh.get(0).wakes() && fresh.get(1).wakes() && fresh.get(1).port() == 1 : "new: " + fresh.size();
+        assert "02:58:36 Active Source from Playback 1 to all".equals(fresh.get(1).summary()) : fresh.get(1).summary();
+        // The ring drops its oldest lines: the overlap is still found.
+        List<Projector.Cec> rolled = Projector.parseCec(CEC_OLD.substring(CEC_OLD.indexOf('\n') + 1) + CEC_WAKE);
+        assert Projector.newCec(old, rolled).isEmpty() == false && Projector.newCec(woke, rolled).isEmpty() : "rolled ring";
+        assert Projector.newCec(woke, woke).isEmpty() : "nothing new";
+
+        FakeShell direct = new FakeShell();
+        direct.pollAnswer = POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=true");
+        final CecAdb adb = new CecAdb();
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(direct, null, new AuroraPlugin.AdbFactory() { @Override public Shell.Runner create(int port) { return adb; } });
+        plugin.start(host, settings("Auto", 30));
+        waitFor(host, "picture");
+        waitUntil(new Check() { public boolean ok() { return host.texts.containsKey("cec"); } }, "baseline sensor");
+        assert "02:54:29 Standby from Playback 1 to all".equals(host.texts.get("cec")) : "baseline shows the newest: " + host.texts.get("cec");
+        assert !direct.scripts.contains(Projector.pictureScript(false)) && !direct.scripts.contains(Projector.pictureScript(true)) : "the baseline acts on nothing";
+
+        adb.history = CEC_OLD + CEC_WAKE;
+        waitUntil(new Check() { public boolean ok() { return direct.scripts.contains(Projector.pictureScript(true)); } }, "picture on after Image View On");
+        waitUntil(new Check() { public boolean ok() { return "02:58:36 Active Source from Playback 1 to all".equals(host.texts.get("cec")); } }, "sensor follows");
+        assert !direct.scripts.toString().contains("HW5") : "already on the TV app: no input switch";
+
+        direct.pollAnswer = POLL_ANSWER;   // the picture now reads on
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        Thread.sleep(300);
+        adb.history = CEC_OLD + CEC_WAKE + CEC_SLEEP;
+        waitUntil(new Check() { public boolean ok() { return direct.scripts.contains(Projector.pictureScript(false)); } }, "picture off after Standby");
+
+        // An app in front keeps its picture through the source's Standby.
+        int offs = Collections.frequency(direct.scripts, Projector.pictureScript(false));
+        direct.pollAnswer = POLL_ANSWER;
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        Thread.sleep(300);
+        adb.foreground = APP_FRONT;
+        adb.history = CEC_OLD + CEC_WAKE + CEC_SLEEP + CEC_SLEEP.replace("03:10:02", "03:20:02");
+        waitUntil(new Check() { public boolean ok() { return "03:20:02 Standby from Playback 1 to all".equals(host.texts.get("cec")); } }, "second standby seen");
+        Thread.sleep(200);
+        assert Collections.frequency(direct.scripts, Projector.pictureScript(false)) == offs : "no dark while Projectivy is in front";
+        plugin.stop();
+    }
+
+    interface Check { boolean ok(); }
+
+    static void waitUntil(Check check, String what) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 6000;
+        while (!check.ok() && System.currentTimeMillis() < deadline) Thread.sleep(50);
+        assert check.ok() : "timed out waiting for: " + what;
     }
 
     /** A Kiosk Satellite restart: a fresh plugin, the display woken (screen-off flag cleared, light

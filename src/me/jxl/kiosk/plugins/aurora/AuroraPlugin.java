@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 package me.jxl.kiosk.plugins.aurora;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -36,6 +38,10 @@ public final class AuroraPlugin implements KioskPlugin {
     private PluginHost host;
     private ScheduledExecutorService worker;
     private ScheduledFuture<?> polling;
+    /** Reads the HDMI-CEC history every few seconds on a shell-user channel (see watchCec). */
+    private ScheduledFuture<?> cecWatch;
+    private Shell.Runner cecRunner;
+    private List<Projector.Cec> lastCec;
     private Map<String, Object> settings = new HashMap<>();
     private Shell.Runner runner;
     private String channelName = "no channel";
@@ -234,6 +240,7 @@ public final class AuroraPlugin implements KioskPlugin {
     @Override public void stop() throws Exception {
         alive.set(false);
         if (polling != null) polling.cancel(false);
+        if (cecWatch != null) cecWatch.cancel(false);
         if (worker != null) {
             worker.shutdownNow();
             worker.awaitTermination(1000, TimeUnit.MILLISECONDS);
@@ -283,6 +290,78 @@ public final class AuroraPlugin implements KioskPlugin {
         if (shellUser != null && Boolean.TRUE.equals(settings.get("startShizuku"))) shellUser.run(Projector.SHIZUKU_START_SCRIPT, 15000);
         if (Boolean.TRUE.equals(settings.get("stayOn"))) guardRunner().run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         poll();
+        watchCec();
+    }
+
+    // ---- HDMI-CEC: the picture follows the source, on the projector itself ----
+
+    /** The CEC history needs the shell user: the ADB or Shizuku channel, or the one behind direct. */
+    private void watchCec() {
+        if (cecWatch != null) cecWatch.cancel(false);
+        lastCec = null;
+        cecRunner = "direct".equals(channelName) ? extra : runner;
+        if (cecRunner == null) return;
+        cecWatch = worker.scheduleWithFixedDelay(new Runnable() {
+            @Override public void run() { safe(new Task() { @Override public void run() { readCec(); } }); }
+        }, 0, Projector.CEC_POLL_MS, TimeUnit.MILLISECONDS);
+    }
+
+    private void readCec() {
+        Shell.Result r = cecRunner.run(Projector.CEC_SCRIPT, 4000);
+        if (!r.ok()) return;
+        List<Projector.Cec> now = Projector.parseCec(r.stdout);
+        boolean first = lastCec == null;
+        List<Projector.Cec> fresh = first ? Collections.<Projector.Cec>emptyList() : Projector.newCec(lastCec, now);
+        lastCec = now;
+        if (first) {
+            // A start is a baseline: show the newest message, act on none of the old ones.
+            for (int i = now.size() - 1; i >= 0; i--) {
+                if (now.get(i).received) { host.publishTextSensor("cec", "Last CEC message", now.get(i).summary()); break; }
+            }
+            return;
+        }
+        for (Projector.Cec c : fresh) {
+            if (!c.received) continue;
+            host.publishTextSensor("cec", "Last CEC message", c.summary());
+            if (Boolean.FALSE.equals(settings.get("followSource"))) continue;
+            if (c.wakes()) sourceWoke(c);
+            else if (c.sleeps()) sourceSlept();
+        }
+    }
+
+    /** A source woke (Image View On / Active Source): picture on, and to its input when the
+     *  projector is showing an app (Projectivy standing in for a sleeping Apple TV). */
+    private void sourceWoke(Projector.Cec c) {
+        boolean changed = false;
+        if (!Boolean.TRUE.equals(lastLight)) {
+            command(Projector.pictureScript(true), "Picture on");
+            commandedPictureOff = false;
+            ledsForPicture(true);
+            settleLight();
+            changed = true;
+        }
+        int port = c.port();
+        if (port > 0 && !foregroundIsTv()) {
+            command(Projector.inputScript(Projector.INPUT_IDS[port - 1]), "Input");
+            changed = true;
+        }
+        if (changed) poll();
+    }
+
+    /** A source went to sleep (Standby): the projector ignores it for its own power, so the
+     *  picture goes dark instead, unless an app on the projector itself is in front. */
+    private void sourceSlept() {
+        if (Boolean.FALSE.equals(lastLight) || !foregroundIsTv()) return;
+        command(Projector.pictureScript(false), "Picture off");
+        commandedPictureOff = true;
+        ledsForPicture(false);
+        settleLight();
+        poll();
+    }
+
+    private boolean foregroundIsTv() {
+        Shell.Result r = cecRunner.run(Projector.FOREGROUND_SCRIPT, 4000);
+        return !r.ok() || r.stdout.trim().isEmpty() || r.stdout.contains(Projector.TV_APP);
     }
 
     /** The stay-on guard writes a secure setting, which the shell user may and the kiosk process

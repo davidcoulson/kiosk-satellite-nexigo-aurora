@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 package me.jxl.kiosk.plugins.aurora;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * What the Aurora Pro's Android side answers to, as fixed shell scripts and their parsers.
@@ -342,5 +346,106 @@ final class Projector {
 
     private static Integer integer(String v) {
         try { return Integer.valueOf(v.trim()); } catch (NumberFormatException e) { return null; }
+    }
+
+    // ------------------------------------------------------------------ HDMI-CEC
+
+    /**
+     * Android's HDMI-CEC service keeps every message it sent [S] and received [R] with a timestamp;
+     * logcat does not carry them. Reading it needs the shell user (DUMP), and takes ~20 ms.
+     */
+    static final String CEC_SCRIPT = "dumpsys hdmi_control 2>/dev/null | grep -E '^ *\\[[RS]\\] time='";
+    /** The app in front: the TV app means the projector is showing an HDMI input. */
+    static final String FOREGROUND_SCRIPT = "dumpsys activity activities 2>/dev/null | grep -m1 mResumedActivity";
+    static final String TV_APP = "com.mediatek.wwtv.tvcenter";
+    /** How often the CEC history is read. */
+    static final long CEC_POLL_MS = 2000L;
+
+    private static final Pattern CEC_LINE = Pattern.compile(
+        "^\\s*\\[([RS])\\] time=(\\S+ \\S+) message=<([^>]+)> src: (\\d+), dst: (\\d+)(?:, params: ([0-9A-Fa-f ]+))?");
+
+    /** One message from the CEC history. */
+    static final class Cec {
+        final boolean received;
+        final String time;
+        final String name;
+        final int src;
+        final int dst;
+        final String params;
+        final String line;
+
+        Cec(boolean received, String time, String name, int src, int dst, String params, String line) {
+            this.received = received; this.time = time; this.name = name;
+            this.src = src; this.dst = dst; this.params = params == null ? "" : params.trim(); this.line = line;
+        }
+
+        /** A source announcing itself: the picture should show. */
+        boolean wakes() {
+            return received && src != 0 && (name.equals("Image View On") || name.equals("Text View On") || name.equals("Active Source"));
+        }
+
+        /** A source going to sleep. The projector ignores it for its own power (the stay-on
+         *  guard); the plugin turns it into a dark picture instead. */
+        boolean sleeps() {
+            return received && src != 0 && name.equals("Standby");
+        }
+
+        /** HDMI port of an Active Source (first nibble of its physical address), or 0. */
+        int port() {
+            if (!name.equals("Active Source") || params.length() < 2) return 0;
+            int p = Character.digit(params.charAt(0), 16);
+            return p >= 1 && p <= 4 ? p : 0;
+        }
+
+        /** Short form for the sensor: "02:58:36 Image View On from Playback 1". */
+        String summary() {
+            String clock = time.length() >= 8 ? time.substring(time.length() - 8) : time;
+            return clock + " " + name + " from " + deviceName(src) + (dst == 15 ? " to all" : "");
+        }
+    }
+
+    /** CEC logical address names (HDMI-CEC 1.4, table 5). */
+    static String deviceName(int logical) {
+        switch (logical) {
+            case 0: return "TV";
+            case 1: case 2: case 9: return "Recorder";
+            case 3: case 6: case 7: case 10: return "Tuner";
+            case 4: return "Playback 1";
+            case 8: return "Playback 2";
+            case 11: return "Playback 3";
+            case 5: return "Audio system";
+            default: return "Device " + logical;
+        }
+    }
+
+    static List<Cec> parseCec(String output) {
+        List<Cec> out = new ArrayList<>();
+        if (output == null) return out;
+        for (String line : output.split("\n")) {
+            Matcher m = CEC_LINE.matcher(line);
+            if (!m.find()) continue;
+            out.add(new Cec("R".equals(m.group(1)), m.group(2), m.group(3),
+                Integer.parseInt(m.group(4)), Integer.parseInt(m.group(5)), m.group(6), line.trim()));
+        }
+        return out;
+    }
+
+    /**
+     * The messages in {@code now} that were not in {@code before}. The history is a ring that
+     * drops its oldest entries, so the newest lines already seen are found in the new read and
+     * everything after them is new. No overlap (a reboot, or more traffic than the ring holds)
+     * means everything is new.
+     */
+    static List<Cec> newCec(List<Cec> before, List<Cec> now) {
+        if (before == null || before.isEmpty()) return new ArrayList<>(now);
+        int k = Math.min(4, before.size());
+        List<String> tail = new ArrayList<>();
+        for (Cec c : before.subList(before.size() - k, before.size())) tail.add(c.line);
+        for (int i = now.size() - k; i >= 0; i--) {
+            boolean match = true;
+            for (int j = 0; j < k && match; j++) match = now.get(i + j).line.equals(tail.get(j));
+            if (match) return new ArrayList<>(now.subList(i + k, now.size()));
+        }
+        return new ArrayList<>(now);
     }
 }
