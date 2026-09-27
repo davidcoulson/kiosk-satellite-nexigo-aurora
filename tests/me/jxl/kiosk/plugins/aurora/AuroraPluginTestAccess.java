@@ -71,6 +71,7 @@ public final class AuroraPluginTestAccess {
         restart();
         cec();
         staleLightSource();
+        cpu();
         guard();
         framework();
         fallback();
@@ -132,6 +133,11 @@ public final class AuroraPluginTestAccess {
         assert Boolean.TRUE.equals(s.light) && Boolean.FALSE.equals(s.screenOff) : "flags";
         assert s.laserWdt == 40 : "wdt";
         assert s.fanPercent == 40 : "fan";
+        long[] c0 = Projector.cpuTimes("cpu  100 0 50 800 50 0 0 0 0 0"), c1 = Projector.cpuTimes("cpu  130 0 70 1040 60 0 0 0 0 0");
+        assert c0[0] == 150 && c0[1] == 1000 : "cpu times";
+        assert Math.abs(Projector.cpuPercent(c0[0], c0[1], c1[0], c1[1]) - 50.0 / 3) < 1e-9 : "cpu busy: " + Projector.cpuPercent(c0[0], c0[1], c1[0], c1[1]);
+        assert Projector.cpuPercent(0, 0, c1[0], c1[1]) == null : "no first reading, no share";
+        assert Projector.cpuTimes("intr 1 2 3") == null : "only the cpu line";
         assert Double.valueOf(34).equals(Projector.hottestLaser(s)) : "hottest laser";
         assert Projector.hottestLaser(Projector.parse("light=true\n")) == null : "no lasers, no reading";
         assert Double.valueOf(43).equals(Projector.hottestLaser(Projector.parse("temps=AT+Temperature#NtcRedLaser1:43,NtcGreenLaser1:41,NtcBlueLaser1:40\n"))) : "red can be the warmest";
@@ -446,6 +452,21 @@ public final class AuroraPluginTestAccess {
         adb.history = adb.history + "    [R] time=2026-09-27 03:31:29 message=<Report Power Status> src: 4, dst: 0, params: 01\n";
         waitUntil(new Check() { public boolean ok() { return Collections.frequency(direct.scripts, Projector.pictureScript(false)) > offs2; } }, "picture off when the source reports standby");
         waitUntil(new Check() { public boolean ok() { return "Apple TV went to standby".equals(host.texts.get("cec")); } }, "power change named: " + host.texts.get("cec"));
+        plugin.stop();
+    }
+
+    /** CPU busy comes from two reads of /proc/stat and shows on the Projector tile. */
+    static void cpu() throws Exception {
+        FakeShell shell = new FakeShell();
+        shell.pollAnswer = POLL_ANSWER + "cpu=cpu  100 0 50 800 50 0 0 0 0 0\n";
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null);
+        plugin.start(host, settings("Direct", 30));
+        waitFor(host, "picture");
+        assert !host.sensors.containsKey("cpu_busy") : "one read gives no share";
+        refreshAnswer(plugin, shell, POLL_ANSWER + "cpu=cpu  130 0 70 1040 60 0 0 0 0 0\n");
+        assert Math.abs((Double) host.sensors.get("cpu_busy") - 50.0 / 3) < 1e-9 : "cpu busy: " + host.sensors.get("cpu_busy");
+        assert host.tiles.get("projector").endsWith("\u00b7 CPU 17%") : "tile: " + host.tiles.get("projector");
         plugin.stop();
     }
 

@@ -132,7 +132,12 @@ final class Projector {
         + " | grep -E 'AT\\+LightSource=(On|Off)' | tail -1 | sed -E 's/^ *([0-9]+)\\.([0-9]{3}).*AT\\+LightSource=(On|Off).*/\\1\\2 \\3/')\";";
 
     /** The log lines alone, for a shell-user channel behind a direct one. */
-    static final String TEMPS_SCRIPT = TEMPS_LINE + LIGHT_SOURCE_LINE + FAN_LINE;
+    /** The kernel's CPU time counters since boot. KS's own CPU sensor can't read them from the app
+     *  sandbox and falls back to the clock position on this chip (no cpuidle), which reads 100 %
+     *  whenever the governor holds 1.3 GHz. The shell user reads them fine. */
+    static final String CPU_LINE = " echo \"cpu=$(head -1 /proc/stat 2>/dev/null)\";";
+
+    static final String TEMPS_SCRIPT = TEMPS_LINE + LIGHT_SOURCE_LINE + FAN_LINE + ";" + CPU_LINE;
 
     /** Proves a loopback ADB session is the shell user, which is the point of it. */
     static final String ADB_PROBE_SCRIPT = "id";
@@ -164,6 +169,7 @@ final class Projector {
         + " echo \"wdt=$(" + TOOL + " getPlatformProperty laser_used_time_wdt 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
         + " " + TEMPS_LINE
         + LIGHT_SOURCE_LINE
+        + CPU_LINE
         + FAN_LINE + ";"
         + " echo \"leds=$(cat /sys/class/appo_led_pwm_pm/appo_led_pwm_pm/led_pwm 2>/dev/null)\";"
         + " echo \"boot=$(settings get global boot_source_id 2>/dev/null)\";"
@@ -255,6 +261,8 @@ final class Projector {
         /** When that command was logged (epoch ms), 0 when unknown. The log prunes busy
          *  processes, so a newer command can be missing while an older one is still there. */
         long lightSourceAt;
+        /** CPU time since boot from /proc/stat: busy and total jiffies, 0 when unread. */
+        long cpuBusy, cpuTotal;
         /** appothermal's commanded fan speed in percent. */
         Integer fanPercent;
         final Map<String, Double> temperatures = new LinkedHashMap<>();
@@ -305,6 +313,11 @@ final class Projector {
                 case "nosignal": s.noSignalOff = integer(value); break;
                 case "sleep": s.sleepMode = integer(value); break;
                 case "held": s.heldOff = bool(value); break;
+                case "cpu": {
+                    long[] c = cpuTimes(value);
+                    if (c != null) { s.cpuBusy = c[0]; s.cpuTotal = c[1]; }
+                    break;
+                }
                 case "ls": {
                     s.lightSource = value.endsWith("On") ? Boolean.TRUE : value.endsWith("Off") ? Boolean.FALSE : null;
                     int sp = value.indexOf(' ');
@@ -421,14 +434,41 @@ final class Projector {
         return name == null ? input : input + " \u00b7 " + name;
     }
 
+    /** Busy and total jiffies from the /proc/stat "cpu" line (user nice system idle iowait irq
+     *  softirq steal), or null. Idle and iowait are idle; the rest is busy. */
+    static long[] cpuTimes(String line) {
+        if (line == null) return null;
+        String[] f = line.trim().split("\\s+");
+        if (f.length < 8 || !f[0].equals("cpu")) return null;
+        long total = 0, idle = 0;
+        try {
+            for (int i = 1; i <= Math.min(8, f.length - 1); i++) {
+                long v = Long.parseLong(f[i]);
+                total += v;
+                if (i == 4 || i == 5) idle += v;
+            }
+        } catch (NumberFormatException e) { return null; }
+        return new long[] {total - idle, total};
+    }
+
+    /** Busy share between two readings, 0-100, or null when they cannot be compared. */
+    static Double cpuPercent(long busy0, long total0, long busy1, long total1) {
+        long dt = total1 - total0, db = busy1 - busy0;
+        if (total0 <= 0 || dt <= 0 || db < 0) return null;
+        return Math.min(100.0, 100.0 * db / dt);
+    }
+
     /** A laser hotter than this shows the Projector tile in amber. */
     static final double LASER_HOT_C = 75;
 
     /** Projector tile: level and text from the light, the hottest laser and the fan. */
-    static String[] projectorTile(Boolean light, Double laser, Integer fan) {
+    static String[] projectorTile(Boolean light, Double laser, Integer fan) { return projectorTile(light, laser, fan, null); }
+
+    static String[] projectorTile(Boolean light, Double laser, Integer fan, Double cpu) {
         StringBuilder t = new StringBuilder(light == null ? "Laser unknown" : light ? "Laser on" : "Laser off");
         if (laser != null) t.append(String.format(Locale.ROOT, " \u00b7 %.0f \u00b0C", laser));
         if (fan != null) t.append(" \u00b7 fan ").append(fan).append('%');
+        if (cpu != null) t.append(String.format(Locale.ROOT, " \u00b7 CPU %.0f%%", cpu));
         String level = laser != null && laser >= LASER_HOT_C ? "warn" : light == null ? "" : light ? "on" : "off";
         return new String[] {level, t.toString()};
     }
@@ -496,7 +536,7 @@ final class Projector {
     }
 
     static final java.util.Set<String> NOTABLE = new java.util.HashSet<>(java.util.Arrays.asList(
-        "Image View On", "Text View On", "Active Source", "Inactive Source", "Standby",
+        "Image View On", "Text View On", "Active Source", "Inactive Source", "InActive Source", "Standby",
         "Routing Change", "Request Active Source", "User Control Pressed",
         "System Audio Mode Request", "Set System Audio Mode"));
 

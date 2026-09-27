@@ -49,6 +49,7 @@ public final class AuroraPlugin implements KioskPlugin {
     /** The tiles and the Showing sensor as last published, so only changes go out. */
     private String lastProjectorTile, lastShowingTile;
     private boolean tilesSupported = true;
+    private long lastCpuBusy, lastCpuTotal;
     private Map<String, Object> settings = new HashMap<>();
     private Shell.Runner runner;
     private String channelName = "no channel";
@@ -380,7 +381,15 @@ public final class AuroraPlugin implements KioskPlugin {
 
     /** Remote Admin's Overview tiles (two at most) and the Showing sensor. */
     private void publishStatus(Projector.State s) {
-        String[] projector = Projector.projectorTile(s.light, Projector.hottestLaser(s), s.fanPercent);
+        // Real CPU use between two reads, from the kernel's counters.
+        Double cpu = null;
+        if (s.cpuTotal > 0) {
+            cpu = Projector.cpuPercent(lastCpuBusy, lastCpuTotal, s.cpuBusy, s.cpuTotal);
+            lastCpuBusy = s.cpuBusy;
+            lastCpuTotal = s.cpuTotal;
+            if (cpu != null) host.publishSensor("cpu_busy", "CPU busy", sensorMeta("%", null, "measurement", 0), cpu);
+        }
+        String[] projector = Projector.projectorTile(s.light, Projector.hottestLaser(s), s.fanPercent, cpu);
         String showing = null;
         if (cecRunner != null) {
             Shell.Result r = cecRunner.run(Projector.SHOWING_SCRIPT, 4000);
@@ -445,6 +454,7 @@ public final class AuroraPlugin implements KioskPlugin {
                 s.temperatures.putAll(log.temperatures);
                 if (s.fanPercent == null) s.fanPercent = log.fanPercent;
                 if (s.lightSource == null) { s.lightSource = log.lightSource; s.lightSourceAt = log.lightSourceAt; }
+                if (s.cpuTotal == 0) { s.cpuBusy = log.cpuBusy; s.cpuTotal = log.cpuTotal; }
             }
         }
         // The settings command answers only the shell user; from the kiosk process the framework
