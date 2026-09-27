@@ -42,6 +42,11 @@ public final class AuroraPlugin implements KioskPlugin {
     private ScheduledFuture<?> cecWatch;
     private Shell.Runner cecRunner;
     private List<Projector.Cec> lastCec;
+    /** Each source's last reported power (true on), by CEC logical address. */
+    private final Map<Integer, Boolean> sourcePower = new HashMap<>();
+    /** The tiles and the Showing sensor as last published, so only changes go out. */
+    private String lastProjectorTile, lastShowingTile;
+    private boolean tilesSupported = true;
     private Map<String, Object> settings = new HashMap<>();
     private Shell.Runner runner;
     private String channelName = "no channel";
@@ -129,7 +134,7 @@ public final class AuroraPlugin implements KioskPlugin {
         // Selects and sensors may start unknown; a switch may not, so Picture waits for a read.
         host.publishSelect("input", "Input", Projector.INPUTS, null);
         host.publishSelect("picture_mode", "Picture mode", Projector.PICTURE_MODES, null);
-        host.publishBinarySensor("screen_off", "Screen off", "", null);
+        host.publishBinarySensor("laser", "Laser status", "", null);
         host.publishBinarySensor("stays_on", "Stays on when the source sleeps", "", null);
         host.publishSelect("front_leds", "Front LEDs", Projector.LEDS, null);
         host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1), null);
@@ -314,7 +319,9 @@ public final class AuroraPlugin implements KioskPlugin {
         List<Projector.Cec> fresh = first ? Collections.<Projector.Cec>emptyList() : Projector.newCec(lastCec, now);
         lastCec = now;
         if (first) {
-            // A start is a baseline: show the newest message, act on none of the old ones.
+            // A start is a baseline: show the newest message, act on none of the old ones, and
+            // learn each source's last reported power.
+            for (Projector.Cec c : now) if (c.powerReport() != null) sourcePower.put(c.src, c.powerReport());
             for (int i = now.size() - 1; i >= 0; i--) {
                 if (now.get(i).received) { host.publishTextSensor("cec", "Last CEC message", now.get(i).summary()); break; }
             }
@@ -323,9 +330,13 @@ public final class AuroraPlugin implements KioskPlugin {
         for (Projector.Cec c : fresh) {
             if (!c.received) continue;
             host.publishTextSensor("cec", "Last CEC message", c.summary());
+            // The projector asks each source for its power every minute. A source that sleeps
+            // without sending Standby (the Apple TV put to sleep over the network) shows up here.
+            Boolean power = c.powerReport();
+            Boolean before = power == null ? null : sourcePower.put(c.src, power);
             if (Boolean.FALSE.equals(settings.get("followSource"))) continue;
             if (c.wakes()) sourceWoke(c);
-            else if (c.sleeps()) sourceSlept();
+            else if (c.sleeps() || (Boolean.TRUE.equals(before) && Boolean.FALSE.equals(power))) sourceSlept();
         }
     }
 
@@ -357,6 +368,29 @@ public final class AuroraPlugin implements KioskPlugin {
         ledsForPicture(false);
         settleLight();
         poll();
+    }
+
+    /** Remote Admin's Overview tiles (two at most) and the Showing sensor. */
+    private void publishStatus(Projector.State s) {
+        String[] projector = Projector.projectorTile(s.light, Projector.hottestLaser(s), s.fanPercent);
+        String showing = null;
+        if (cecRunner != null) {
+            Shell.Result r = cecRunner.run(Projector.SHOWING_SCRIPT, 4000);
+            if (r.ok()) showing = Projector.showing(Projector.foregroundPackage(r.stdout), s.input(), Projector.cecDevices(r.stdout));
+        }
+        if (showing != null) host.publishTextSensor("showing", "Showing", showing);
+        if (!tilesSupported) return;
+        try {
+            String p = projector[0] + "|" + projector[1];
+            if (!p.equals(lastProjectorTile)) { host.publishStatusTile("projector", "Projector", projector[0], projector[1]); lastProjectorTile = p; }
+            if (showing != null) {
+                String level = Boolean.TRUE.equals(s.light) ? "on" : Boolean.FALSE.equals(s.light) ? "off" : "";
+                String v = level + "|" + showing;
+                if (!v.equals(lastShowingTile)) { host.publishStatusTile("showing", "Showing", level, showing); lastShowingTile = v; }
+            }
+        } catch (UnsupportedOperationException e) {
+            tilesSupported = false;   // an older Kiosk Satellite without Overview tiles
+        }
     }
 
     private boolean foregroundIsTv() {
@@ -398,7 +432,7 @@ public final class AuroraPlugin implements KioskPlugin {
                 Projector.State log = Projector.parse(more.stdout);
                 s.temperatures.putAll(log.temperatures);
                 if (s.fanPercent == null) s.fanPercent = log.fanPercent;
-                if (s.lightSource == null) s.lightSource = log.lightSource;
+                if (s.lightSource == null) { s.lightSource = log.lightSource; s.lightSourceAt = log.lightSourceAt; }
             }
         }
         // The settings command answers only the shell user; from the kiosk process the framework
@@ -420,6 +454,9 @@ public final class AuroraPlugin implements KioskPlugin {
         if (now - pictureCommandAt < Projector.LASER_SETTLE_MS) heatSays = null;
         // The HAL's own last light-source command outranks the heat: it is logged the moment it
         // is sent, a laser relit while still hot barely warms further, and it names every sender.
+        // A command older than this plugin's own last picture command is stale: its own, newer
+        // command was pruned from the log (2026-09-27: an old On re-lit a picture turned off from HA).
+        if (s.lightSource != null && s.lightSourceAt > 0 && s.lightSourceAt < pictureCommandAt) s.lightSource = null;
         if (s.lightSource != null) heatSays = s.lightSource;
         if (heatSays != null && !heatSays.equals(s.light)) {
             if (heatSays && commandedPictureOff && now - startedAt < Projector.RESTART_GUARD_MS) {
@@ -449,6 +486,7 @@ public final class AuroraPlugin implements KioskPlugin {
             guardRunner().run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         }
         publish(s);
+        publishStatus(s);
     }
 
     private void fill(Projector.State s, String key, String field) {
@@ -468,7 +506,9 @@ public final class AuroraPlugin implements KioskPlugin {
         host.publishSelect("input", "Input", Projector.INPUTS, commandedInput != null ? commandedInput : s.input());
         host.publishBinarySensor("stays_on", "Stays on when the source sleeps", "", s.staysOn());
         host.publishSelect("picture_mode", "Picture mode", Projector.PICTURE_MODES, s.pictureModeLabel());
-        host.publishBinarySensor("screen_off", "Screen off", "", s.screenOff);
+        // What the laser is doing, as best this plugin can tell (the flags corrected by the HAL's
+        // light-source commands and the heat). Replaces the vendor's inverted "screen off" flag.
+        host.publishBinarySensor("laser", "Laser status", "", s.light);
         host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1),
             s.laserMinutes == null ? null : s.laserMinutes / 60.0);
         // The speed appothermal commands (the same on every fan PWM); the fans have no tachometer.

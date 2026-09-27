@@ -128,7 +128,8 @@ final class Projector {
     /** The last light-source command the HAL sent the light engine, whoever asked for it: this
      *  plugin, the remote, or the vendor's own services lighting it for the Android UI (which
      *  leave the flags alone). The one direct readback of the laser. */
-    static final String LIGHT_SOURCE_LINE = " echo \"ls=$(logcat -d --pid=$(pidof vendor.appotronics.projectormanager@1.0-service) 2>/dev/null | grep -oE 'AT\\+LightSource=(On|Off)' | tail -1)\";";
+    static final String LIGHT_SOURCE_LINE = " echo \"ls=$(logcat -d -v epoch --pid=$(pidof vendor.appotronics.projectormanager@1.0-service) 2>/dev/null"
+        + " | grep -E 'AT\\+LightSource=(On|Off)' | tail -1 | sed -E 's/^ *([0-9]+)\\.([0-9]{3}).*AT\\+LightSource=(On|Off).*/\\1\\2 \\3/')\";";
 
     /** The log lines alone, for a shell-user channel behind a direct one. */
     static final String TEMPS_SCRIPT = TEMPS_LINE + LIGHT_SOURCE_LINE + FAN_LINE;
@@ -251,6 +252,9 @@ final class Projector {
         Boolean heldOff;
         /** The last AT+LightSource command in the HAL's log: true On, false Off, null none seen. */
         Boolean lightSource;
+        /** When that command was logged (epoch ms), 0 when unknown. The log prunes busy
+         *  processes, so a newer command can be missing while an older one is still there. */
+        long lightSourceAt;
         /** appothermal's commanded fan speed in percent. */
         Integer fanPercent;
         final Map<String, Double> temperatures = new LinkedHashMap<>();
@@ -301,7 +305,12 @@ final class Projector {
                 case "nosignal": s.noSignalOff = integer(value); break;
                 case "sleep": s.sleepMode = integer(value); break;
                 case "held": s.heldOff = bool(value); break;
-                case "ls": s.lightSource = value.endsWith("=On") ? Boolean.TRUE : value.endsWith("=Off") ? Boolean.FALSE : null; break;
+                case "ls": {
+                    s.lightSource = value.endsWith("On") ? Boolean.TRUE : value.endsWith("Off") ? Boolean.FALSE : null;
+                    int sp = value.indexOf(' ');
+                    if (sp > 0) { try { s.lightSourceAt = Long.parseLong(value.substring(0, sp)); } catch (NumberFormatException ignored) { s.lightSourceAt = 0; } }
+                    break;
+                }
                 case "fan": s.fanPercent = integer(value.substring(value.indexOf(':') + 1)); break;
                 case "temps": parseTemperatures(value, s); break;
                 default: break;
@@ -358,6 +367,72 @@ final class Projector {
     /** The app in front: the TV app means the projector is showing an HDMI input. */
     static final String FOREGROUND_SCRIPT = "dumpsys activity activities 2>/dev/null | grep -m1 mResumedActivity";
     static final String TV_APP = "com.mediatek.wwtv.tvcenter";
+    /** What the projector is showing: the app in front, and the CEC devices by HDMI port. */
+    static final String SHOWING_SCRIPT = FOREGROUND_SCRIPT + "; dumpsys hdmi_control 2>/dev/null | grep 'display_name' | grep -v mDeviceInfo";
+    private static final Pattern RESUMED = Pattern.compile("u0 ([A-Za-z0-9_.]+)/");
+    private static final Pattern CEC_DEVICE = Pattern.compile("display_name: (.+?) power_status: (-?\\d+) physical_address: \\S+ port_id: (-?\\d+)");
+
+    /** Package of the app in front, or null. */
+    static String foregroundPackage(String output) {
+        if (output == null) return null;
+        for (String line : output.split("\n")) {
+            if (!line.contains("mResumedActivity")) continue;
+            Matcher m = RESUMED.matcher(line);
+            if (m.find()) return m.group(1);
+        }
+        return null;
+    }
+
+    /** CEC device names by HDMI port (1-4), from the service's device list. */
+    static Map<Integer, String> cecDevices(String output) {
+        Map<Integer, String> out = new LinkedHashMap<>();
+        if (output == null) return out;
+        for (String line : output.split("\n")) {
+            Matcher m = CEC_DEVICE.matcher(line);
+            if (!m.find()) continue;
+            int port = Integer.parseInt(m.group(3));
+            if (port >= 1 && port <= 4) out.put(port, m.group(1).trim());
+        }
+        return out;
+    }
+
+    /** A readable name for an app in front of the projector. */
+    static String appLabel(String pkg) {
+        if (pkg == null) return "Unknown";
+        switch (pkg) {
+            case "com.spocky.projengmenu": return "Projectivy";
+            case "com.plexapp.android": return "Plex";
+            case "com.edde746.plezy": return "Plezy";
+            case "org.smarttube.stable": return "SmartTube";
+            case "com.limelight": return "Moonlight";
+            case "me.jxl.kiosk_satellite": return "Kiosk Satellite";
+            case "moe.shizuku.privileged.api": return "Shizuku";
+            case "com.appo.settings": return "Projector settings";
+            default: return pkg;
+        }
+    }
+
+    /** "HDMI 1 · Apple TV" for the TV app, the app's name otherwise. */
+    static String showing(String pkg, String input, Map<Integer, String> devices) {
+        if (pkg != null && !pkg.equals(TV_APP)) return appLabel(pkg);
+        if (input == null) return "HDMI input";
+        int idx = java.util.Arrays.asList(INPUTS).indexOf(input);
+        String name = idx >= 0 ? devices.get(idx + 1) : null;
+        return name == null ? input : input + " \u00b7 " + name;
+    }
+
+    /** A laser hotter than this shows the Projector tile in amber. */
+    static final double LASER_HOT_C = 75;
+
+    /** Projector tile: level and text from the light, the hottest laser and the fan. */
+    static String[] projectorTile(Boolean light, Double laser, Integer fan) {
+        StringBuilder t = new StringBuilder(light == null ? "Laser unknown" : light ? "Laser on" : "Laser off");
+        if (laser != null) t.append(String.format(Locale.ROOT, " \u00b7 %.0f \u00b0C", laser));
+        if (fan != null) t.append(" \u00b7 fan ").append(fan).append('%');
+        String level = laser != null && laser >= LASER_HOT_C ? "warn" : light == null ? "" : light ? "on" : "off";
+        return new String[] {level, t.toString()};
+    }
+
     /** How often the CEC history is read. */
     static final long CEC_POLL_MS = 2000L;
 
@@ -388,6 +463,16 @@ final class Projector {
          *  guard); the plugin turns it into a dark picture instead. */
         boolean sleeps() {
             return received && src != 0 && name.equals("Standby");
+        }
+
+        /** A Report Power Status answer: true on (00), false standby (01) or going to standby
+         *  (03), null for anything else. */
+        Boolean powerReport() {
+            if (!received || !name.equals("Report Power Status") || params.isEmpty()) return null;
+            String p = params.substring(0, Math.min(2, params.length()));
+            if (p.equals("00") || p.equals("02")) return Boolean.TRUE;
+            if (p.equals("01") || p.equals("03")) return Boolean.FALSE;
+            return null;
         }
 
         /** HDMI port of an Active Source (first nibble of its physical address), or 0. */

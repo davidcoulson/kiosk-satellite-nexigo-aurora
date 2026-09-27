@@ -51,6 +51,8 @@ public final class AuroraPluginTestAccess {
         @Override public void publishSensor(String key, String name, Map<String, Object> metadata, Double state) { sensors.put(key, state); }
         @Override public void publishBinarySensor(String key, String name, String deviceClass, Boolean state) { binary.put(key, state); }
         final Map<String, Object> texts = new LinkedHashMap<>();
+        final Map<String, String> tiles = new LinkedHashMap<>();
+        @Override public void publishStatusTile(String key, String title, String level, String text) { tiles.put(key, level + "|" + text); }
         @Override public void publishTextSensor(String key, String name, String state) { texts.put(key, state); }
         @Override public Map<String, Object> shizukuState() {
             Map<String, Object> m = new HashMap<>();
@@ -68,6 +70,7 @@ public final class AuroraPluginTestAccess {
         heat();
         restart();
         cec();
+        staleLightSource();
         guard();
         framework();
         fallback();
@@ -154,8 +157,9 @@ public final class AuroraPluginTestAccess {
             "setprop cur.appo.light.enabled false && /vendor/bin/hw/projector-test setLightSourceOnOff false && setprop cur.prj.screenOff true; setprop cur.djc.picture_off true") : "off recipe order";
         assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false; setprop cur.djc.picture_off false") : "on recipe";
         assert Boolean.TRUE.equals(Projector.parse("held=true\n").heldOff) && Projector.parse("held=\n").heldOff == null : "held note";
-        assert Boolean.TRUE.equals(Projector.parse("ls=AT+LightSource=On\n").lightSource) && Boolean.FALSE.equals(Projector.parse("ls=AT+LightSource=Off\n").lightSource)
+        assert Boolean.TRUE.equals(Projector.parse("ls=1790500677085 On\n").lightSource) && Boolean.FALSE.equals(Projector.parse("ls=1790500677085 Off\n").lightSource)
             && Projector.parse("ls=\n").lightSource == null : "light-source command";
+        assert Projector.parse("ls=1790500677085 On\n").lightSourceAt == 1790500677085L : "light-source time";
         assert Projector.inputScript(7).endsWith("HW7") : "input uri";
         assert Projector.ledsScript(Projector.LED_OFF).endsWith("setAppoLeds 2 6") && Projector.ledsScript(Projector.LED_STANDBY).endsWith("setAppoLeds 2 2") : "leds";
         assert Projector.idFor(Projector.LEDS, Projector.LED_IDS, "Bluetooth") == 4 : "led table";
@@ -178,7 +182,7 @@ public final class AuroraPluginTestAccess {
         assert Boolean.TRUE.equals(host.switches.get("picture")) : "switch from light flag";
         assert "HDMI 2".equals(host.selects.get("input")) : "input select";
         assert "Cinema Pro".equals(host.selects.get("picture_mode")) : "mode select";
-        assert Boolean.FALSE.equals(host.binary.get("screen_off")) : "screen off";
+        assert Boolean.TRUE.equals(host.binary.get("laser")) : "laser status on";
         assert Math.abs((Double) host.sensors.get("laser_hours") - 25.5) < 1e-9 : "hours " + host.sensors.get("laser_hours");
         assert host.sensors.get("temp_dmd").equals(37.0) : "dmd";
         assert !host.sensors.containsKey("temp_xpr") : "unreported temperatures are not published";
@@ -210,7 +214,7 @@ public final class AuroraPluginTestAccess {
         waitScripts(shell, shell.scripts.size() + 2);
         Thread.sleep(100);
         assert shell.scripts.contains(Projector.REFLAG_SCREEN_OFF_SCRIPT) : "screen-off flag re-asserted";
-        assert Boolean.TRUE.equals(host.binary.get("screen_off")) : "sensor reflects the re-asserted flag";
+        assert Boolean.TRUE.equals(shell.scripts.contains(Projector.REFLAG_SCREEN_OFF_SCRIPT)) && Boolean.FALSE.equals(host.binary.get("laser")) : "laser status off while dark";
         shell.pollAnswer = POLL_ANSWER;
 
         // The toggle goes by the light as last read: dark after that refresh, so it lights, and
@@ -371,6 +375,8 @@ public final class AuroraPluginTestAccess {
         @Override public Shell.Result run(String script, int timeoutMs) {
             if (script.equals(Projector.CEC_SCRIPT)) { scripts.add(script); return new Shell.Result(0, history, "", false); }
             if (script.equals(Projector.FOREGROUND_SCRIPT)) { scripts.add(script); return new Shell.Result(0, foreground, "", false); }
+            if (script.equals(Projector.SHOWING_SCRIPT)) { scripts.add(script); return new Shell.Result(0, foreground
+                + "      CEC: logical_address: 0x04 device_type: 4 vendor_id: 4346 display_name: Apple TV power_status: 0 physical_address: 0x2000 port_id: 2\n", "", false); }
             return super.run(script, timeoutMs);
         }
     }
@@ -420,6 +426,42 @@ public final class AuroraPluginTestAccess {
         waitUntil(new Check() { public boolean ok() { return "03:20:02 Standby from Playback 1 to all".equals(host.texts.get("cec")); } }, "second standby seen");
         Thread.sleep(200);
         assert Collections.frequency(direct.scripts, Projector.pictureScript(false)) == offs : "no dark while Projectivy is in front";
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitUntil(new Check() { public boolean ok() { return "Projectivy".equals(host.texts.get("showing")); } }, "showing names the app");
+
+        // A source that sleeps without Standby: its power report goes from on to standby.
+        adb.foreground = TV_FRONT;
+        direct.pollAnswer = POLL_ANSWER;
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitUntil(new Check() { public boolean ok() { return "HDMI 2 \u00b7 Apple TV".equals(host.texts.get("showing")); } }, "showing names the input and its device");
+        assert ("on|HDMI 2 \u00b7 Apple TV").equals(host.tiles.get("showing")) : "showing tile: " + host.tiles.get("showing");
+        assert ("on|Laser on \u00b7 34 \u00b0C \u00b7 fan 40%").equals(host.tiles.get("projector")) : "projector tile: " + host.tiles.get("projector");
+        int offs2 = Collections.frequency(direct.scripts, Projector.pictureScript(false));
+        String base = adb.history;
+        adb.history = base + "    [R] time=2026-09-27 03:30:29 message=<Report Power Status> src: 4, dst: 0, params: 00\n";
+        Thread.sleep(2500);
+        adb.history = adb.history + "    [R] time=2026-09-27 03:31:29 message=<Report Power Status> src: 4, dst: 0, params: 01\n";
+        waitUntil(new Check() { public boolean ok() { return Collections.frequency(direct.scripts, Projector.pictureScript(false)) > offs2; } }, "picture off when the source reports standby");
+        plugin.stop();
+    }
+
+    /** A light-source command older than the plugin's own last picture command is ignored: the
+     *  newer one was pruned from the log. */
+    static void staleLightSource() throws Exception {
+        FakeShell shell = new FakeShell();
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null);
+        plugin.start(host, settings("Direct", 30));
+        waitFor(host, "picture");
+        Map<String, Object> off = new HashMap<>();
+        off.put("on", false);
+        plugin.onEvent("switch.picture", off);
+        waitScripts(shell, shell.scripts.size() + 1);
+        long old = System.currentTimeMillis() - 60_000L;
+        refreshAnswer(plugin, shell, darkAt(27, 23).replace("light=false", "light=false\nheld=true\nls=" + old + " On"));
+        assert Boolean.FALSE.equals(host.switches.get("picture")) : "an old On does not re-light it";
+        assert !shell.scripts.contains(Projector.reflagLightScript(true)) : "no re-flag from a stale line";
+        assert Boolean.FALSE.equals(host.binary.get("laser")) : "laser status off";
         plugin.stop();
     }
 
@@ -441,7 +483,7 @@ public final class AuroraPluginTestAccess {
         plugin.start(host, settings("Direct", 30));
         waitFor(host, "picture");
         assert shell.scripts.contains(Projector.REFLAG_SCREEN_OFF_SCRIPT) : "deliberate dark put back after a restart: " + shell.scripts;
-        assert Boolean.TRUE.equals(host.binary.get("screen_off")) : "screen off shows";
+        assert Boolean.FALSE.equals(host.binary.get("laser")) : "laser status off";
         plugin.stop();
 
         // Then the vendor lights the laser for Kiosk Satellite's activity, flags untouched: with the
@@ -460,7 +502,7 @@ public final class AuroraPluginTestAccess {
 
         // Relit while still hot: the heat barely moves, but the HAL's own command gives it away.
         FakeShell hot = new FakeShell();
-        hot.pollAnswer = darkAt(60, 23).replace("light=false", "light=false\nheld=true\nls=AT+LightSource=On");
+        hot.pollAnswer = darkAt(60, 23).replace("light=false", "light=false\nheld=true\nls=1790500677085 On");
         FakeHost host4 = new FakeHost();
         AuroraPlugin plugin4 = new AuroraPlugin(hot, null);
         plugin4.start(host4, settings("Direct", 30));
@@ -471,7 +513,7 @@ public final class AuroraPluginTestAccess {
 
         // Lit from the remote long after a start (no guard): the On is reported, the note cleared.
         FakeShell remote = new FakeShell();
-        remote.pollAnswer = darkAt(27, 23).replace("light=false", "light=false\nls=AT+LightSource=On");
+        remote.pollAnswer = darkAt(27, 23).replace("light=false", "light=false\nls=1790500677085 On");
         FakeHost host5 = new FakeHost();
         AuroraPlugin plugin5 = new AuroraPlugin(remote, null);
         plugin5.start(host5, settings("Direct", 30));
