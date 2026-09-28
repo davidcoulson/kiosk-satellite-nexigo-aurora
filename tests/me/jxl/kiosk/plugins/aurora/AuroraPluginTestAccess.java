@@ -134,6 +134,11 @@ public final class AuroraPluginTestAccess {
         assert s.laserWdt == 40 : "wdt";
         assert s.fanPercent == 40 : "fan";
         // Every script the loopback ADB channel runs must survive the exit-code marker appended to it.
+        String chain = "      CEC: logical_address: 0x05 device_type: 5 vendor_id: 1 display_name: JBL Bar1300M2 power_status: 0 physical_address: 0x1000 port_id: 1\n"
+            + "      CEC: logical_address: 0x04 device_type: 4 vendor_id: 4346 display_name: Apple TV power_status: 0 physical_address: 0x1100 port_id: 1\n";
+        assert "HDMI 1 \u00b7 Apple TV".equals(Projector.showing(Projector.TV_APP, "HDMI 1", Projector.cecDevices(chain))) : "behind the bar: " + Projector.cecDevices(chain);
+        assert Projector.shellQuote("it's").equals("'it'\\''s'") : Projector.shellQuote("it's");
+        assert !Adb.shellService(Projector.CEC_LOG_START_SCRIPT).contains(";;") && !Adb.shellService(Projector.cecLogAppendScript(java.util.Arrays.asList("a"))).contains(";;") : "log scripts";
         assert Adb.shellService("echo a;").equals("shell:echo a; echo " + Adb.MARK + "$?") : Adb.shellService("echo a;");
         for (String script : new String[] {Projector.POLL_SCRIPT, Projector.TEMPS_SCRIPT, Projector.CEC_SCRIPT,
                 Projector.SHOWING_SCRIPT, Projector.FOREGROUND_SCRIPT, Projector.STAY_ON_SCRIPT, Projector.SHIZUKU_START_SCRIPT}) {
@@ -384,9 +389,15 @@ public final class AuroraPluginTestAccess {
     static final class CecAdb extends FakeAdb {
         volatile String history = CEC_OLD;
         volatile String foreground = TV_FRONT;
+        volatile String previousBoot = "boot=1234\n"
+            + "    [R] time=2026-09-27 16:55:58 message=<Report Power Status> src: 5, dst: 0, params: 00\n"
+            + "    [R] time=2026-09-27 16:56:01 message=<Set System Audio Mode> src: 5, dst: 15, params: 00\n";
+        final List<String> appended = Collections.synchronizedList(new ArrayList<String>());
         @Override public Shell.Result run(String script, int timeoutMs) {
             if (script.equals(Projector.CEC_SCRIPT)) { scripts.add(script); return new Shell.Result(0, history, "", false); }
             if (script.equals(Projector.FOREGROUND_SCRIPT)) { scripts.add(script); return new Shell.Result(0, foreground, "", false); }
+            if (script.equals(Projector.CEC_LOG_START_SCRIPT)) { scripts.add(script); return new Shell.Result(0, previousBoot, "", false); }
+            if (script.startsWith("F=" + Projector.CEC_LOG + "; printf")) { scripts.add(script); appended.add(script); return new Shell.Result(0, "", "", false); }
             if (script.equals(Projector.SHOWING_SCRIPT)) { scripts.add(script); return new Shell.Result(0, foreground
                 + "      CEC: logical_address: 0x04 device_type: 4 vendor_id: 4346 display_name: Apple TV power_status: 0 physical_address: 0x2000 port_id: 2\n", "", false); }
             return super.run(script, timeoutMs);
@@ -418,10 +429,14 @@ public final class AuroraPluginTestAccess {
         waitFor(host, "picture");
         waitUntil(new Check() { public boolean ok() { return host.texts.containsKey("cec"); } }, "baseline sensor");
         assert "Standby from Apple TV to all".equals(host.texts.get("cec")) : "baseline shows the newest notable, named: " + host.texts.get("cec");
+        assert ("16:55:58 Report Power Status from Audio system \u00b7 16:56:01 Set System Audio Mode from Audio system to all").equals(host.texts.get("cec_before_boot"))
+            : "before last boot: " + host.texts.get("cec_before_boot");
+        assert !adb.appended.isEmpty() && adb.appended.get(0).contains("message=<Standby>") : "the baseline goes to the log";
         assert !direct.scripts.contains(Projector.pictureScript(false)) && !direct.scripts.contains(Projector.pictureScript(true)) : "the baseline acts on nothing";
 
         adb.history = CEC_OLD + CEC_WAKE;
         waitUntil(new Check() { public boolean ok() { return direct.scripts.contains(Projector.pictureScript(true)); } }, "picture on after Image View On");
+        waitUntil(new Check() { public boolean ok() { return adb.appended.size() >= 2 && adb.appended.get(adb.appended.size() - 1).contains("Active Source"); } }, "new messages logged");
         waitUntil(new Check() { public boolean ok() { return "Active Source from Apple TV to all".equals(host.texts.get("cec")); } }, "sensor follows");
         assert !direct.scripts.toString().contains("HW5") : "already on the TV app: no input switch";
 

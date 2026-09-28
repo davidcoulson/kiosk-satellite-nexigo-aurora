@@ -311,6 +311,12 @@ public final class AuroraPlugin implements KioskPlugin {
         lastCec = null;
         cecRunner = "direct".equals(channelName) ? extra : runner;
         if (cecRunner == null) return;
+        // What the projector heard before its last boot: after a standby that is the trigger.
+        Shell.Result prev = cecRunner.run(Projector.CEC_LOG_START_SCRIPT, 4000);
+        if (prev.ok()) {
+            List<Projector.Cec> before = Projector.parseCec(prev.stdout);
+            if (!before.isEmpty()) host.publishTextSensor("cec_before_boot", "CEC before last boot", Projector.cecTail(before, 4, cecNames));
+        }
         cecWatch = worker.scheduleWithFixedDelay(new Runnable() {
             @Override public void run() { safe(new Task() { @Override public void run() { readCec(); } }); }
         }, 0, Projector.CEC_POLL_MS, TimeUnit.MILLISECONDS);
@@ -323,6 +329,11 @@ public final class AuroraPlugin implements KioskPlugin {
         boolean first = lastCec == null;
         List<Projector.Cec> fresh = first ? Collections.<Projector.Cec>emptyList() : Projector.newCec(lastCec, now);
         lastCec = now;
+        // Everything new goes to the log on storage, sent and received, so a standby that wipes the
+        // service's history still leaves the last messages behind.
+        List<String> logLines = new java.util.ArrayList<>();
+        for (Projector.Cec c : first ? now.subList(Math.max(0, now.size() - 10), now.size()) : fresh) logLines.add(c.line);
+        if (!logLines.isEmpty()) cecRunner.run(Projector.cecLogAppendScript(logLines), 4000);
         if (first) {
             // A start is a baseline: show the newest notable message, act on none of the old
             // ones, and learn each source's last reported power.

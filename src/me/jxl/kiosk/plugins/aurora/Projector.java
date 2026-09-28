@@ -2,6 +2,7 @@
 package me.jxl.kiosk.plugins.aurora;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -383,7 +384,7 @@ final class Projector {
     /** What the projector is showing: the app in front, and the CEC devices by HDMI port. */
     static final String SHOWING_SCRIPT = FOREGROUND_SCRIPT + "; dumpsys hdmi_control 2>/dev/null | grep 'display_name' | grep -v mDeviceInfo";
     private static final Pattern RESUMED = Pattern.compile("u0 ([A-Za-z0-9_.]+)/");
-    private static final Pattern CEC_DEVICE = Pattern.compile("display_name: (.+?) power_status: (-?\\d+) physical_address: \\S+ port_id: (-?\\d+)");
+    private static final Pattern CEC_DEVICE = Pattern.compile("device_type: (\\d+) .*?display_name: (.+?) power_status: (-?\\d+) physical_address: \\S+ port_id: (-?\\d+)");
 
     /** Package of the app in front, or null. */
     static String foregroundPackage(String output) {
@@ -396,15 +397,23 @@ final class Projector {
         return null;
     }
 
-    /** CEC device names by HDMI port (1-4), from the service's device list. */
+    /** CEC device names by HDMI port (1-4), from the service's device list. A source (playback,
+     *  recorder, tuner) wins over an audio system on the same port: behind a soundbar the Apple
+     *  TV is what is showing, the bar only passes it through. */
     static Map<Integer, String> cecDevices(String output) {
         Map<Integer, String> out = new LinkedHashMap<>();
+        Map<Integer, Integer> types = new HashMap<>();
         if (output == null) return out;
         for (String line : output.split("\n")) {
             Matcher m = CEC_DEVICE.matcher(line);
             if (!m.find()) continue;
-            int port = Integer.parseInt(m.group(3));
-            if (port >= 1 && port <= 4) out.put(port, m.group(1).trim());
+            int type = Integer.parseInt(m.group(1));
+            int port = Integer.parseInt(m.group(4));
+            if (port < 1 || port > 4) continue;
+            Integer had = types.get(port);
+            if (had != null && had != 5 && type == 5) continue;   // keep the source over the audio system
+            out.put(port, m.group(2).trim());
+            types.put(port, type);
         }
         return out;
     }
@@ -471,6 +480,40 @@ final class Projector {
         if (cpu != null) t.append(String.format(Locale.ROOT, " \u00b7 CPU %.0f%%", cpu));
         String level = laser != null && laser >= LASER_HOT_C ? "warn" : light == null ? "" : light ? "on" : "off";
         return new String[] {level, t.toString()};
+    }
+
+    /** The CEC messages seen, kept on the projector's storage across a standby (a cold boot wipes
+     *  the service's own history). The first line names the boot they belong to. */
+    static final String CEC_LOG = "/data/local/tmp/aurora-cec.log";
+
+    /** At start: a log from an earlier boot becomes the ".prev" log and a fresh one is begun;
+     *  prints the previous boot's log. Keyed by boot id, not the clock (it is wrong right after a boot). */
+    static final String CEC_LOG_START_SCRIPT = "B=$(cat /proc/sys/kernel/random/boot_id); F=" + CEC_LOG + ";"
+        + " if [ -f $F ] && [ \"$(head -1 $F)\" != \"boot=$B\" ]; then mv $F $F.prev; fi;"
+        + " [ -f $F ] || echo \"boot=$B\" > $F; cat $F.prev 2>/dev/null; true";
+
+    /** Appends lines to the log, keeping the boot line and the newest 100 entries. */
+    static String cecLogAppendScript(List<String> lines) {
+        StringBuilder sb = new StringBuilder("F=" + CEC_LOG + "; printf '%s\\n'");
+        for (String l : lines) sb.append(' ').append(shellQuote(l));
+        sb.append(" >> $F; if [ $(wc -l < $F) -gt 120 ]; then (head -1 $F; tail -n 100 $F) > $F.t && mv $F.t $F; fi; true");
+        return sb.toString();
+    }
+
+    static String shellQuote(String s) {
+        return "'" + s.replace("'", "'\\''") + "'";
+    }
+
+    /** "16:56:01 Set System Audio Mode from JBL to all · ..." for the newest messages of a log. */
+    static String cecTail(List<Cec> log, int count, Map<Integer, String> names) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = Math.max(0, log.size() - count); i < log.size(); i++) {
+            Cec c = log.get(i);
+            if (sb.length() > 0) sb.append(" \u00b7 ");
+            String clock = c.time.length() >= 8 ? c.time.substring(c.time.length() - 8) : c.time;
+            sb.append(clock).append(' ').append(c.received ? "" : "sent ").append(c.summary(names));
+        }
+        return sb.length() > 250 ? sb.substring(sb.length() - 250) : sb.toString();
     }
 
     /** How often the CEC history is read. */
