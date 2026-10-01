@@ -15,7 +15,7 @@ public final class AuroraPluginTestAccess {
 
     static final String POLL_ANSWER =
         "light=true\nscreenoff=false\nsource=6\nmode=8\nminutes=1530\n"
-        + "temps=AT+Temperature#NtcRedLaser1:28,NtcGreenLaser1:25,NtcBlueLaser1:34,NtcCw1:33,NtcDmd1:37,NtcEnv1:23\nleds=0\n"
+        + "temps=AT+Temperature#NtcRedLaser1:28,NtcGreenLaser1:25,NtcBlueLaser1:55,NtcCw1:33,NtcDmd1:37,NtcEnv1:23\nleds=0\n"
         + "fan=Thermal speed:40\nboot=5\ncec=true\nsleep=0\nnosignal=0\nwdt=40\n";
 
     /** Records every script and answers the poll with a canned projector. */
@@ -149,7 +149,7 @@ public final class AuroraPluginTestAccess {
         assert Math.abs(Projector.cpuPercent(c0[0], c0[1], c1[0], c1[1]) - 50.0 / 3) < 1e-9 : "cpu busy: " + Projector.cpuPercent(c0[0], c0[1], c1[0], c1[1]);
         assert Projector.cpuPercent(0, 0, c1[0], c1[1]) == null : "no first reading, no share";
         assert Projector.cpuTimes("intr 1 2 3") == null : "only the cpu line";
-        assert Double.valueOf(34).equals(Projector.hottestLaser(s)) : "hottest laser";
+        assert Double.valueOf(55).equals(Projector.hottestLaser(s)) : "hottest laser";
         assert Projector.hottestLaser(Projector.parse("light=true\n")) == null : "no lasers, no reading";
         assert Double.valueOf(43).equals(Projector.hottestLaser(Projector.parse("temps=AT+Temperature#NtcRedLaser1:43,NtcGreenLaser1:41,NtcBlueLaser1:40\n"))) : "red can be the warmest";
         assert "HDMI 2".equals(s.input()) : "input " + s.input();
@@ -193,7 +193,7 @@ public final class AuroraPluginTestAccess {
         assert shell.scripts.contains(Projector.STAY_ON_SCRIPT) : "stay-on guards applied at start";
         assert Boolean.TRUE.equals(host.binary.get("stays_on")) : "stays on";
         assert Double.valueOf(40).equals(host.sensors.get("fan_speed")) : "fan speed published: " + host.sensors.get("fan_speed");
-        assert Double.valueOf(34).equals(host.sensors.get("laser_temp")) : "hottest laser (blue 34 over red 28, green 25): " + host.sensors.get("laser_temp");
+        assert Double.valueOf(55).equals(host.sensors.get("laser_temp")) : "hottest laser (blue 55 over red 28, green 25): " + host.sensors.get("laser_temp");
         assert !host.sensors.containsKey("temp_red_laser") && !host.sensors.containsKey("temp_blue_laser") && !host.sensors.containsKey("temp_green_laser") : "no per-laser sensors: " + host.sensors.keySet();
         assert Double.valueOf(37).equals(host.sensors.get("temp_dmd")) : "the other NTCs still publish";
         assert Boolean.TRUE.equals(host.switches.get("picture")) : "switch from light flag";
@@ -323,7 +323,7 @@ public final class AuroraPluginTestAccess {
     /** A poll answer with the flags dark and the blue laser / ambient at these temperatures. */
     static String darkAt(int blue, int ambient) {
         return POLL_ANSWER.replace("light=true", "light=false").replace("screenoff=false", "screenoff=true")
-            .replace("NtcBlueLaser1:34", "NtcBlueLaser1:" + blue).replace("NtcEnv1:23", "NtcEnv1:" + ambient);
+            .replace("NtcBlueLaser1:55", "NtcBlueLaser1:" + blue).replace("NtcEnv1:23", "NtcEnv1:" + ambient);
     }
 
     /** The flags say dark but the laser is warming: it was lit behind their back. The counter,
@@ -337,7 +337,12 @@ public final class AuroraPluginTestAccess {
         assert Projector.laserLit(parseWith(42, 23), 41.0) == null : "one degree of noise is not heating";
         assert Projector.laserLit(hot, null) == null : "no trend on the first read";
         assert Projector.laserLit(cooling, 53.0) == null : "hot and cooling defers to the flag";
-        assert Projector.laserLit(parseWith(33, 23), 30.0) == null : "the band between defers";
+        assert Boolean.FALSE.equals(Projector.laserLit(parseWith(33, 23), 33.0)) : "an idle laser 10 over ambient is dark";
+        assert Projector.laserLit(parseWith(33, 23), 30.0) == null : "warming from cold is not yet lit, nor dark";
+        // 2026-09-30 11:55: lit at 59, then 53 thirty seconds later, the flags still on.
+        assert Boolean.FALSE.equals(Projector.laserLit(parseWith(53, 24), 59.0, 59.0)) : "falling fast from its peak is dark";
+        assert Projector.laserLit(parseWith(57, 24), 58.0, 59.0) == null : "a lit laser's wander is not";
+        assert Projector.laserLit(parseWith(53, 24), 52.0, 59.0) == null : "warming again is not dark";
         assert Projector.laserLit(Projector.parse("light=false\nscreenoff=true\n"), 30.0) == null : "no log, no say";
 
         FakeShell shell = new FakeShell();
@@ -358,7 +363,7 @@ public final class AuroraPluginTestAccess {
 
         // Picture off from Home Assistant while the laser is still hot and the log line is old.
         FakeShell after = new FakeShell();
-        after.pollAnswer = POLL_ANSWER.replace("NtcBlueLaser1:34", "NtcBlueLaser1:53");
+        after.pollAnswer = POLL_ANSWER.replace("NtcBlueLaser1:55", "NtcBlueLaser1:53");
         FakeHost host2 = new FakeHost();
         AuroraPlugin dark = new AuroraPlugin(after, null);
         dark.start(host2, settings("Direct", 30));
@@ -465,7 +470,15 @@ public final class AuroraPluginTestAccess {
         plugin.execute("refresh", Collections.<String, Object>emptyMap());
         waitUntil(new Check() { public boolean ok() { return "HDMI 2 \u00b7 Apple TV".equals(host.texts.get("showing")); } }, "showing names the input and its device");
         assert ("on|HDMI 2 \u00b7 Apple TV").equals(host.tiles.get("showing")) : "showing tile: " + host.tiles.get("showing");
-        assert ("on|Laser on \u00b7 34 \u00b0C \u00b7 fan 40%").equals(host.tiles.get("projector")) : "projector tile: " + host.tiles.get("projector");
+        assert ("on|Laser on \u00b7 55 \u00b0C \u00b7 fan 40%").equals(host.tiles.get("projector")) : "projector tile: " + host.tiles.get("projector");
+        // The soundbar going to standby (its own idle timer) leaves the picture alone.
+        int offsBar = Collections.frequency(direct.scripts, Projector.pictureScript(false));
+        adb.history = adb.history + "    [R] time=2026-09-27 03:28:29 message=<Report Power Status> src: 5, dst: 0, params: 00\n";
+        Thread.sleep(2500);
+        adb.history = adb.history + "    [R] time=2026-09-27 03:29:29 message=<Report Power Status> src: 5, dst: 0, params: 01\n";
+        waitUntil(new Check() { public boolean ok() { return String.valueOf(host.texts.get("cec")).endsWith("went to standby"); } }, "bar standby named: " + host.texts.get("cec"));
+        Thread.sleep(300);
+        assert Collections.frequency(direct.scripts, Projector.pictureScript(false)) == offsBar : "no dark when only the soundbar sleeps";
         int offs2 = Collections.frequency(direct.scripts, Projector.pictureScript(false));
         String base = adb.history;
         adb.history = base + "    [R] time=2026-09-27 03:30:29 message=<Report Power Status> src: 4, dst: 0, params: 00\n";
@@ -559,7 +572,7 @@ public final class AuroraPluginTestAccess {
 
         // Lit from the remote long after a start (no guard): the On is reported, the note cleared.
         FakeShell remote = new FakeShell();
-        remote.pollAnswer = darkAt(27, 23).replace("light=false", "light=false\nls=1790500677085 On");
+        remote.pollAnswer = darkAt(27, 23).replace("light=false", "light=false\nls=" + System.currentTimeMillis() + " On");
         FakeHost host5 = new FakeHost();
         AuroraPlugin plugin5 = new AuroraPlugin(remote, null);
         plugin5.start(host5, settings("Direct", 30));
@@ -567,6 +580,18 @@ public final class AuroraPluginTestAccess {
         assert Boolean.TRUE.equals(host5.switches.get("picture")) : "a lit laser nobody here held off is reported on";
         assert remote.scripts.contains(Projector.reflagLightScript(true)) : "flags brought in line";
         plugin5.stop();
+
+        // An On from hours ago against a laser at ambient: the command is old news, the heat wins.
+        FakeShell stale = new FakeShell();
+        stale.pollAnswer = POLL_ANSWER.replace("NtcBlueLaser1:55", "NtcBlueLaser1:33") + "ls=1790500677085 On\n";
+        FakeHost host6 = new FakeHost();
+        AuroraPlugin plugin6 = new AuroraPlugin(stale, null);
+        plugin6.start(host6, settings("Direct", 30));
+        waitFor(host6, "picture");
+        assert Boolean.FALSE.equals(host6.switches.get("picture")) : "an old On does not outvote a cold laser: " + host6.switches.get("picture");
+        assert stale.scripts.contains(Projector.reflagLightScript(false)) : "flags brought in line";
+        assert stale.scripts.toString().contains("[P] time=") && stale.scripts.toString().contains("laser dark behind the flags, by heat") : "the decision is noted on storage";
+        plugin6.stop();
 
         // The same dark without the note (the power menu, the sleep timer) is only recorded.
         FakeShell other = new FakeShell();

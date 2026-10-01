@@ -199,8 +199,16 @@ final class Projector {
      *  plateau must not read as lit. */
     static final double LIT_OVER_AMBIENT = 12;
     static final double HEATING_STEP = 2;
-    /** Within this much of ambient: dark. Between the two, or hot and cooling, the flag decides. */
-    static final double DARK_OVER_AMBIENT = 8;
+    /** Within this much of ambient and not heating: dark. A dark laser idles 7-12 °C over ambient
+     *  (the DLP board's heat); a lit one is 25 °C over within three minutes and 30-37 °C over once
+     *  settled. Was 8, which an idle laser never reached: on 2026-09-30 the laser went dark at
+     *  11:55 behind lit flags and the picture read on for three hours. */
+    static final double DARK_OVER_AMBIENT = 15;
+    /** This far under its recent peak and still falling: dark. A laser switching off drops 6-9 °C
+     *  in the first 30 s; a lit one holds within a degree or two. */
+    static final double COOLING_DROP = 6;
+    /** How far back the recent peak looks. */
+    static final long PEAK_WINDOW_MS = 150_000L;
     /** How long after a picture command the heat is not trusted: the log line can be 30 s old and
      *  the laser takes a minute or more to warm or cool across the thresholds. */
     static final long LASER_SETTLE_MS = 180_000L;
@@ -208,18 +216,24 @@ final class Projector {
      *  is put back out rather than reported: the start itself is what lit it. */
     static final long RESTART_GUARD_MS = 300_000L;
 
+    static Boolean laserLit(State s, Double previousBlue) { return laserLit(s, previousBlue, null); }
+
     /**
      * What the laser's heat says about the light: true when well over ambient and heating (a
-     * laser lit behind the flags' back), false when back near ambient, null when it cannot tell
-     * (no log, no previous reading, steady, cooling, or the band between). A steady hot laser
-     * says nothing: the flag already agrees with it unless the plugin started after it was lit.
+     * laser lit behind the flags' back); false when near ambient and not heating, or falling
+     * fast from its recent peak (a laser switched off behind the flags' back); null when it
+     * cannot tell (no log, no previous reading, warming from cold, or hot and steady). A steady
+     * hot laser says nothing: the flag already agrees with it unless the plugin started after
+     * it was lit.
      */
-    static Boolean laserLit(State s, Double previousBlue) {
+    static Boolean laserLit(State s, Double previousBlue, Double recentPeak) {
         Double blue = s.temperatures.get(LASER_NTC), ambient = s.temperatures.get(AMBIENT_NTC);
         if (blue == null || ambient == null) return null;
         double over = blue - ambient;
+        boolean heating = previousBlue != null && blue - previousBlue >= HEATING_STEP;
+        if (heating) return over >= LIT_OVER_AMBIENT ? Boolean.TRUE : null;
         if (over <= DARK_OVER_AMBIENT) return Boolean.FALSE;
-        if (over >= LIT_OVER_AMBIENT && previousBlue != null && blue - previousBlue >= HEATING_STEP) return Boolean.TRUE;
+        if (recentPeak != null && previousBlue != null && blue <= previousBlue && recentPeak - blue >= COOLING_DROP) return Boolean.FALSE;
         return null;
     }
 
@@ -397,6 +411,9 @@ final class Projector {
         return null;
     }
 
+    /** An audio system's CEC logical address, which is also its device type. */
+    static final int AUDIO_SYSTEM = 5;
+
     /** CEC device names by HDMI port (1-4), from the service's device list. A source (playback,
      *  recorder, tuner) wins over an audio system on the same port: behind a soundbar the Apple
      *  TV is what is showing, the bar only passes it through. */
@@ -411,7 +428,7 @@ final class Projector {
             int port = Integer.parseInt(m.group(4));
             if (port < 1 || port > 4) continue;
             Integer had = types.get(port);
-            if (had != null && had != 5 && type == 5) continue;   // keep the source over the audio system
+            if (had != null && had != AUDIO_SYSTEM && type == AUDIO_SYSTEM) continue;   // keep the source over the audio system
             out.put(port, m.group(2).trim());
             types.put(port, type);
         }
@@ -546,6 +563,12 @@ final class Projector {
          *  guard); the plugin turns it into a dark picture instead. */
         boolean sleeps() {
             return received && src != 0 && name.equals("Standby");
+        }
+
+        /** From the audio system (a soundbar on the ARC port). Its standby says nothing about the
+         *  picture: on 2026-09-30 the JBL's auto-standby after AirPlay darkened the Apple TV. */
+        boolean fromAudioSystem() {
+            return src == AUDIO_SYSTEM;
         }
 
         /** A Report Power Status answer: true on (00), false standby (01) or going to standby

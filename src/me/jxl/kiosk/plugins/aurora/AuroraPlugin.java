@@ -74,6 +74,11 @@ public final class AuroraPlugin implements KioskPlugin {
     /** The blue laser's last reading, for its trend; and when a picture command last went out. */
     private Double lastBlue;
     private volatile long pictureCommandAt;
+    /** The blue laser's readings over the last few minutes, oldest first, for its recent peak. */
+    private final java.util.ArrayDeque<double[]> blueHistory = new java.util.ArrayDeque<>();
+    /** The newest light-source command already acted on: each one counts once, so a command
+     *  from hours ago cannot outvote the laser's heat. */
+    private long lightSourceHandledAt;
     private boolean fanPublished;
     /** When this plugin started, which is when Kiosk Satellite (re)started. */
     private volatile long startedAt;
@@ -356,7 +361,7 @@ public final class AuroraPlugin implements KioskPlugin {
                 Projector.nameOf(c.src, cecNames) + (power ? " woke up" : " went to standby"));
             if (Boolean.FALSE.equals(settings.get("followSource"))) continue;
             if (c.wakes()) sourceWoke(c);
-            else if (c.sleeps() || (powerChanged && Boolean.FALSE.equals(power))) sourceSlept();
+            else if ((c.sleeps() || (powerChanged && Boolean.FALSE.equals(power))) && !c.fromAudioSystem()) sourceSlept();
         }
     }
 
@@ -410,7 +415,7 @@ public final class AuroraPlugin implements KioskPlugin {
                 if (!names.isEmpty()) cecNames = names;
             }
         }
-        if (showing != null) host.publishTextSensor("showing", "Showing", showing);
+        if (showing != null) { host.publishTextSensor("showing", "Showing", showing); lastShowing = showing; }
         if (!tilesSupported) return;
         try {
             String p = projector[0] + "|" + projector[1];
@@ -423,6 +428,19 @@ public final class AuroraPlugin implements KioskPlugin {
         } catch (UnsupportedOperationException e) {
             tilesSupported = false;   // an older Kiosk Satellite without Overview tiles
         }
+    }
+
+    /** What the Showing sensor last said, for the notes below. */
+    private volatile String lastShowing;
+
+    /** A line in the log on storage, beside the CEC messages, for what the plugin decided about
+     *  the light on its own: after an unexplained dark picture or standby it says when and why.
+     *  The CEC readers skip it. */
+    private void note(String what) {
+        Shell.Runner r = cecRunner != null ? cecRunner : runner;
+        if (r == null) return;
+        String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new java.util.Date());
+        r.run(Projector.cecLogAppendScript(Collections.singletonList("[P] time=" + time + " " + what)), 4000);
     }
 
     private boolean foregroundIsTv() {
@@ -480,7 +498,13 @@ public final class AuroraPlugin implements KioskPlugin {
         // 2026-09-26 it climbed every minute with the laser cold and re-lit the picture twice).
         long now = System.currentTimeMillis();
         Double blue = s.temperatures.get(Projector.LASER_NTC);
-        Boolean heatSays = Projector.laserLit(s, lastBlue);
+        Double peak = null;
+        if (blue != null) {
+            while (!blueHistory.isEmpty() && now - blueHistory.peekFirst()[0] > Projector.PEAK_WINDOW_MS) blueHistory.pollFirst();
+            for (double[] b : blueHistory) peak = peak == null ? b[1] : Math.max(peak, b[1]);
+            blueHistory.addLast(new double[] {now, blue});
+        }
+        Boolean heatSays = Projector.laserLit(s, lastBlue, peak);
         if (blue != null) lastBlue = blue;
         // The log line can be 30 s old and a laser takes a minute to warm or cool: right after a
         // picture command the flag is the truth.
@@ -490,8 +514,20 @@ public final class AuroraPlugin implements KioskPlugin {
         // A command older than this plugin's own last picture command is stale: its own, newer
         // command was pruned from the log (2026-09-27: an old On re-lit a picture turned off from HA).
         if (s.lightSource != null && s.lightSourceAt > 0 && s.lightSourceAt < pictureCommandAt) s.lightSource = null;
-        if (s.lightSource != null) heatSays = s.lightSource;
+        // Each command counts once, and once it is older than the laser takes to warm or cool,
+        // only when the heat has nothing to say (2026-09-30: an On from 11:46 kept the picture
+        // reading on for three hours after the laser went dark at 11:55).
+        String why = heatSays == null ? null : "heat (blue " + Math.round(blue) + (peak != null ? ", peak " + Math.round(peak) : "") + ")";
+        if (s.lightSource != null && s.lightSourceAt > lightSourceHandledAt) {
+            if (heatSays == null || now - s.lightSourceAt < Projector.LASER_SETTLE_MS) {
+                heatSays = s.lightSource;
+                why = "AT+LightSource=" + (s.lightSource ? "On" : "Off");
+            }
+            lightSourceHandledAt = s.lightSourceAt;
+        }
         if (heatSays != null && !heatSays.equals(s.light)) {
+            note("laser " + (heatSays ? "lit" : "dark") + " behind the flags, by " + why
+                + (lastShowing != null ? "; showing " + lastShowing : ""));
             if (heatSays && commandedPictureOff && now - startedAt < Projector.RESTART_GUARD_MS) {
                 // Kiosk Satellite starting brings its activity forward; the vendor's background
                 // service then lights the laser for the Android UI (AT+LightSource=On, 2026-09-26),
