@@ -103,6 +103,12 @@ final class Projector {
      * reads the timer's on every check); the setting needs WRITE_SECURE_SETTINGS, so it may fail
      * on the direct channel and is reported from the read-back instead.
      */
+    /** Android's CEC system-audio and ARC control: with both on, ARC to a soundbar on HDMI 1 is
+     *  established and the projector's own apps play through the bar. Both shipped off, and on
+     *  2026-09-30 a standby put them back to off after they had been turned on. */
+    static final String[] ARC_SETTINGS = {"hdmi_system_audio_control_enabled", "hdmi_arc_control_enabled"};
+    static final String ARC_AUDIO_SCRIPT = "settings put global " + ARC_SETTINGS[0] + " 1; settings put global " + ARC_SETTINGS[1] + " 1; true";
+
     static final String STAY_ON_SCRIPT = "setprop persist.appo.ignore.cec.standby true;"
         + " setprop persist.prj.sleepMode " + SLEEP_OFF + ";"
         + " settings put global no_signal_auto_power_off " + NO_SIGNAL_OFF + " 2>/dev/null; true";

@@ -302,6 +302,7 @@ public final class AuroraPlugin implements KioskPlugin {
         Shell.Runner shellUser = runner == adb ? runner : (extra == adb ? extra : null);
         if (shellUser != null && Boolean.TRUE.equals(settings.get("startShizuku"))) shellUser.run(Projector.SHIZUKU_START_SCRIPT, 15000);
         if (Boolean.TRUE.equals(settings.get("stayOn"))) guardRunner().run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
+        if (Boolean.TRUE.equals(settings.get("arcAudio"))) guardRunner().run(Projector.ARC_AUDIO_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         // Known before the first read, so the Showing tile does not wait a poll.
         cecRunner = "direct".equals(channelName) ? extra : runner;
         poll();
@@ -553,6 +554,15 @@ public final class AuroraPlugin implements KioskPlugin {
         // this one says whether it held.
         if (Boolean.TRUE.equals(settings.get("stayOn")) && Boolean.FALSE.equals(s.staysOn())) {
             guardRunner().run(Projector.STAY_ON_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
+        }
+        // The same for ARC audio to a soundbar.
+        if (Boolean.TRUE.equals(settings.get("arcAudio"))) {
+            for (String key : Projector.ARC_SETTINGS) {
+                if (!"0".equals(globals.get(key))) continue;
+                guardRunner().run(Projector.ARC_AUDIO_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
+                note("ARC audio settings found off; turned back on");
+                break;
+            }
         }
         publish(s);
         publishStatus(s);

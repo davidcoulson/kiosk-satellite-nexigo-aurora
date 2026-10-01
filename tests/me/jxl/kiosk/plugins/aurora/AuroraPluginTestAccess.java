@@ -74,6 +74,7 @@ public final class AuroraPluginTestAccess {
         cpu();
         guard();
         framework();
+        arcAudio();
         fallback();
         loopback();
     }
@@ -658,6 +659,37 @@ public final class AuroraPluginTestAccess {
         assert "HDMI 2".equals(host.selects.get("input")) : "boot source from the framework: " + host.selects.get("input");
         assert host.binary.get("stays_on") == null : "cec unknown keeps stays-on unknown";
         plugin.stop();
+    }
+
+    /** ARC audio to the soundbar: set at start, and put back when a read finds it off. */
+    static void arcAudio() throws Exception {
+        FakeShell shell = new FakeShell();
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null);
+        final Map<String, String> globals = new HashMap<>();
+        globals.put("hdmi_system_audio_control_enabled", "1");
+        globals.put("hdmi_arc_control_enabled", "1");
+        plugin.useGlobals(new AuroraPlugin.Globals() { @Override public String get(String key) { return globals.get(key); } });
+        Map<String, Object> on = settings("Direct", 30);
+        on.put("arcAudio", true);
+        plugin.start(host, on);
+        waitFor(host, "picture");
+        int applied = Collections.frequency(shell.scripts, Projector.ARC_AUDIO_SCRIPT);
+        assert applied == 1 : "set at start: " + applied;
+        globals.put("hdmi_arc_control_enabled", "0");
+        refreshAnswer(plugin, shell, POLL_ANSWER);
+        assert Collections.frequency(shell.scripts, Projector.ARC_AUDIO_SCRIPT) == 2 : "put back when found off";
+        assert shell.scripts.toString().contains("ARC audio settings found off") : "noted";
+        plugin.stop();
+
+        FakeShell off = new FakeShell();
+        AuroraPlugin plugin2 = new AuroraPlugin(off, null);
+        plugin2.useGlobals(new AuroraPlugin.Globals() { @Override public String get(String key) { return "0"; } });
+        FakeHost host2 = new FakeHost();
+        plugin2.start(host2, settings("Direct", 30));
+        waitFor(host2, "picture");
+        assert !off.scripts.contains(Projector.ARC_AUDIO_SCRIPT) : "left alone with the setting off";
+        plugin2.stop();
     }
 
     static void fallback() throws Exception {
