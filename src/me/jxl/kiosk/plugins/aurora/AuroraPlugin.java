@@ -539,26 +539,42 @@ public final class AuroraPlugin implements KioskPlugin {
         if (dex == null) return;
         String path = Projector.vendorDexPath(sha1(dex).substring(0, 12));
         Shell.Result present = r.run(Projector.vendorPresentScript(path), 4000);
-        if (present.ok() && present.stdout.contains("present")) { vendorPath = path; return; }
+        if (present.ok() && present.stdout.contains("present")) {
+            Shell.Result check = r.run(Projector.vendorScript(path, "quick"), 20000);
+            if (check.ok() && check.stdout.contains("brightness=")) { vendorPath = path; return; }
+        }
         String b64 = base64(dex);
         for (int i = 0; i < b64.length(); i += VENDOR_CHUNK) {
             Shell.Result c = r.run(Projector.vendorChunkScript(path, b64.substring(i, Math.min(b64.length(), i + VENDOR_CHUNK)), i == 0), 10000);
             if (!c.ok()) { host.log("Vendor helper install failed: " + c.why()); return; }
         }
         Shell.Result done = r.run(Projector.vendorFinishScript(path), 10000);
-        if (done.ok() && done.stdout.contains("present")) vendorPath = path;
-        else host.log("Vendor helper install failed: " + done.why());
+        if (!done.ok() || !done.stdout.contains("present")) { host.log("Vendor helper install failed: " + done.why()); return; }
+        // Trusted only once it answers.
+        Shell.Result check = r.run(Projector.vendorScript(path, "quick"), 20000);
+        if (check.ok() && check.stdout.contains("brightness=")) vendorPath = path;
+        else { r.run("rm -f " + path, 4000); host.log("Vendor helper did not run: " + check.why()); }
     }
 
     /** Base64 pieces small enough for one shell command over the loopback ADB channel. */
     static final int VENDOR_CHUNK = 16000;
 
-    /** This plugin's own DEX, from the jar its class loader reads (Kiosk Satellite's
-     *  DexClassLoader on plugin.jar); null when there is none (the tests). */
+    /** This plugin's own DEX, from the plugin.jar its class loader reads (Kiosk Satellite's
+     *  DexClassLoader); null when there is none (the tests). Not getResourceAsStream: that asks
+     *  the parent first and returns Kiosk Satellite's own classes.dex (0.4.0 installed that). */
     private static byte[] ownDex() {
         ClassLoader cl = AuroraPlugin.class.getClassLoader();
-        try (java.io.InputStream in = cl == null ? null : cl.getResourceAsStream("classes.dex")) {
-            if (in == null) return null;
+        java.net.URL own = null;
+        try {
+            if (cl != null) for (java.util.Enumeration<java.net.URL> e = cl.getResources("classes.dex"); e.hasMoreElements(); ) {
+                java.net.URL u = e.nextElement();
+                if (u.toString().contains("plugin.jar!")) own = u;
+            }
+        } catch (java.io.IOException e) {
+            return null;
+        }
+        if (own == null) return null;
+        try (java.io.InputStream in = own.openStream()) {
             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
             byte[] buf = new byte[16384];
             for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
