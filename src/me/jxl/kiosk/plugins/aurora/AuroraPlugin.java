@@ -46,6 +46,8 @@ public final class AuroraPlugin implements KioskPlugin {
     private final Map<Integer, Boolean> sourcePower = new HashMap<>();
     /** CEC device names by logical address ("Apple TV"), refreshed with each read. */
     private volatile Map<Integer, String> cecNames = new HashMap<>();
+    /** Each CEC device's HDMI port, by logical address. */
+    private volatile Map<Integer, Integer> cecPorts = new HashMap<>();
     /** The tiles and the Showing sensor as last published, so only changes go out. */
     private String lastProjectorTile, lastShowingTile;
     private boolean tilesSupported = true;
@@ -360,7 +362,7 @@ public final class AuroraPlugin implements KioskPlugin {
                 Projector.nameOf(c.src, cecNames) + (power ? " woke up" : " went to standby"));
             if (Boolean.FALSE.equals(settings.get("followSource"))) continue;
             if (c.wakes()) sourceWoke(c);
-            else if ((c.sleeps() || (powerChanged && Boolean.FALSE.equals(power))) && !c.fromAudioSystem()) sourceSlept();
+            else if ((c.sleeps() || (powerChanged && Boolean.FALSE.equals(power))) && !c.fromAudioSystem()) sourceSlept(c);
         }
     }
 
@@ -375,18 +377,38 @@ public final class AuroraPlugin implements KioskPlugin {
             settleLight();
             changed = true;
         }
+        // A source that wakes claims the screen, as CEC's One Touch Play means: to its input when
+        // an app is in front or another input is showing (2026-10-01 21:11: the Apple TV woke and
+        // the picture came back on the Unraid VM's HDMI 3).
         int port = c.port();
-        if (port > 0 && !foregroundIsTv()) {
+        if (port == 0) { Integer p = cecPorts.get(c.src); if (p != null) port = p; }
+        Integer showing = currentPort();
+        if (port > 0 && (!foregroundIsTv() || (showing != null && showing != port))) {
             command(Projector.inputScript(Projector.INPUT_IDS[port - 1]), "Input");
+            commandedInput = Projector.INPUTS[port - 1];
+            sourceAtCommand = last.sourceId;
             changed = true;
         }
         if (changed) poll();
     }
 
+    /** The HDMI port on the wall: the input last picked through this plugin, else the vendor's
+     *  property (which a pass-through switch leaves behind). Null when unknown. */
+    private Integer currentPort() {
+        return Projector.portOf(commandedInput != null ? commandedInput : last.input());
+    }
+
     /** A source went to sleep (Standby): the projector ignores it for its own power, so the
-     *  picture goes dark instead, unless an app on the projector itself is in front. */
-    private void sourceSlept() {
+     *  picture goes dark instead, unless an app on the projector itself is in front or the
+     *  source is not on the input showing (2026-10-01 20:40: the Apple TV's Standby darkened the
+     *  Unraid VM on HDMI 3). */
+    private void sourceSlept(Projector.Cec c) {
         if (Boolean.FALSE.equals(lastLight) || !foregroundIsTv()) return;
+        Integer port = cecPorts.get(c.src), showing = currentPort();
+        if (port != null && showing != null && !port.equals(showing)) {
+            note(Projector.nameOf(c.src, cecNames) + " slept on HDMI " + port + " while HDMI " + showing + " shows: picture left on");
+            return;
+        }
         command(Projector.pictureScript(false), "Picture off");
         commandedPictureOff = true;
         ledsForPicture(false);
@@ -412,6 +434,8 @@ public final class AuroraPlugin implements KioskPlugin {
                 showing = Projector.showing(Projector.foregroundPackage(r.stdout), commandedInput != null ? commandedInput : s.input(), Projector.cecDevices(r.stdout));
                 Map<Integer, String> names = Projector.cecNames(r.stdout);
                 if (!names.isEmpty()) cecNames = names;
+                Map<Integer, Integer> ports = Projector.cecPorts(r.stdout);
+                if (!ports.isEmpty()) cecPorts = ports;
             }
         }
         if (showing != null) { host.publishTextSensor("showing", "Showing", showing); lastShowing = showing; }
@@ -440,6 +464,8 @@ public final class AuroraPlugin implements KioskPlugin {
         if (r == null) return;
         String time = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new java.util.Date());
         r.run(Projector.cecLogAppendScript(Collections.singletonList("[P] time=" + time + " " + what)), 4000);
+        // And to Home Assistant, whose history keeps every one: how often the plugin overrides.
+        if (alive.get()) host.publishTextSensor("correction", "Last correction", what);
     }
 
     private boolean foregroundIsTv() {

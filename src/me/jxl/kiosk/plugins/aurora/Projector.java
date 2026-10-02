@@ -601,6 +601,29 @@ final class Projector {
         return n != null && !n.isEmpty() ? n : deviceName(logical);
     }
 
+    /** HDMI port (1-4) of each CEC device by logical address, from the service's device list:
+     *  which input a source that wakes or sleeps is on. */
+    static Map<Integer, Integer> cecPorts(String output) {
+        Map<Integer, Integer> out = new LinkedHashMap<>();
+        if (output == null) return out;
+        for (String line : output.split("\n")) {
+            Matcher m = CEC_PORT.matcher(line);
+            if (!m.find()) continue;
+            int port = Integer.parseInt(m.group(2));
+            if (port >= 1 && port <= 4) out.put(Integer.parseInt(m.group(1), 16), port);
+        }
+        return out;
+    }
+
+    private static final Pattern CEC_PORT = Pattern.compile("logical_address: 0x([0-9A-Fa-f]+) .*?port_id: (-?\\d+)");
+
+    /** "HDMI 3" to 3, anything else to null. */
+    static Integer portOf(String input) {
+        if (input == null) return null;
+        for (int i = 0; i < INPUTS.length; i++) if (INPUTS[i].equals(input)) return i + 1;
+        return null;
+    }
+
     private static final Pattern CEC_NAME = Pattern.compile("logical_address: 0x([0-9A-Fa-f]+) .*?display_name: (.+?) power_status:");
 
     /** CEC device names by logical address, from the service's device list. */

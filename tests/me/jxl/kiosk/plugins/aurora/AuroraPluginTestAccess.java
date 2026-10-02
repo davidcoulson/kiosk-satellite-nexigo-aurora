@@ -383,7 +383,7 @@ public final class AuroraPluginTestAccess {
         + "    [R] time=2026-09-27 02:54:29 message=<Standby> src: 4, dst: 15\n";
     static final String CEC_WAKE =
         "    [R] time=2026-09-27 02:58:36 message=<Image View On> src: 4, dst: 0\n"
-        + "    [R] time=2026-09-27 02:58:36 message=<Active Source> src: 4, dst: 15, params: 10 00\n";
+        + "    [R] time=2026-09-27 02:58:36 message=<Active Source> src: 4, dst: 15, params: 20 00\n";
     static final String CEC_SLEEP = "    [R] time=2026-09-27 03:10:02 message=<Standby> src: 4, dst: 15\n";
     static final String TV_FRONT = "    mResumedActivity: ActivityRecord{5d0fb2b u0 com.mediatek.wwtv.tvcenter/.nav.TurnkeyUiMainActivity t633}\n";
     static final String APP_FRONT = "    mResumedActivity: ActivityRecord{51cb830 u0 com.spocky.projengmenu/.ui.home.MainActivity t631}\n";
@@ -413,7 +413,7 @@ public final class AuroraPluginTestAccess {
         assert old.size() == 3 && !old.get(0).received && old.get(2).sleeps() : "parse: " + old.size();
         List<Projector.Cec> woke = Projector.parseCec(CEC_OLD + CEC_WAKE);
         List<Projector.Cec> fresh = Projector.newCec(old, woke);
-        assert fresh.size() == 2 && fresh.get(0).wakes() && fresh.get(1).wakes() && fresh.get(1).port() == 1 : "new: " + fresh.size();
+        assert fresh.size() == 2 && fresh.get(0).wakes() && fresh.get(1).wakes() && fresh.get(1).port() == 2 : "new: " + fresh.size();
         assert "Active Source from Playback 1 to all".equals(fresh.get(1).summary(null)) : fresh.get(1).summary(null);
         Map<Integer, String> names = Projector.cecNames("      CEC: logical_address: 0x04 device_type: 4 vendor_id: 4346 display_name: Apple TV power_status: 0 physical_address: 0x1000 port_id: 1\n");
         assert "Image View On from Apple TV".equals(fresh.get(0).summary(names)) : fresh.get(0).summary(names);
@@ -441,7 +441,7 @@ public final class AuroraPluginTestAccess {
         waitUntil(new Check() { public boolean ok() { return direct.scripts.contains(Projector.pictureScript(true)); } }, "picture on after Image View On");
         waitUntil(new Check() { public boolean ok() { return adb.appended.size() >= 2 && adb.appended.get(adb.appended.size() - 1).contains("Active Source"); } }, "new messages logged");
         waitUntil(new Check() { public boolean ok() { return "Active Source from Apple TV to all".equals(host.texts.get("cec")); } }, "sensor follows");
-        assert !direct.scripts.toString().contains("HW5") : "already on the TV app: no input switch";
+        assert !direct.scripts.toString().contains("HW6") && !direct.scripts.toString().contains("HW5") : "already on the source's input: no input switch";
 
         direct.pollAnswer = POLL_ANSWER;   // the picture now reads on
         plugin.execute("refresh", Collections.<String, Object>emptyMap());
@@ -461,6 +461,22 @@ public final class AuroraPluginTestAccess {
         assert Collections.frequency(direct.scripts, Projector.pictureScript(false)) == offs : "no dark while Projectivy is in front";
         plugin.execute("refresh", Collections.<String, Object>emptyMap());
         waitUntil(new Check() { public boolean ok() { return "Projectivy".equals(host.texts.get("showing")); } }, "showing names the app");
+
+        // Another input on the wall (the Unraid VM on HDMI 3): the Apple TV (HDMI 2) sleeping
+        // leaves it alone, and the Apple TV waking takes the projector to HDMI 2.
+        adb.foreground = TV_FRONT;
+        direct.pollAnswer = POLL_ANSWER.replace("source=6", "source=7");
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitUntil(new Check() { public boolean ok() { return "HDMI 3".equals(host.texts.get("showing")); } }, "showing HDMI 3: " + host.texts.get("showing"));
+        int offsVm = Collections.frequency(direct.scripts, Projector.pictureScript(false));
+        adb.history = adb.history + CEC_SLEEP.replace("03:10:02", "03:25:02");
+        waitUntil(new Check() { public boolean ok() { return adb.appended.toString().contains("picture left on"); } }, "noted: " + adb.appended);
+        assert Collections.frequency(direct.scripts, Projector.pictureScript(false)) == offsVm : "the VM's picture stays on";
+        adb.history = adb.history + CEC_WAKE.replace("02:58:36", "03:26:36");
+        waitUntil(new Check() { public boolean ok() { return direct.scripts.toString().contains("HW6"); } }, "to the Apple TV's input on its wake");
+        direct.pollAnswer = POLL_ANSWER;
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        Thread.sleep(300);
 
         // A source that sleeps without Standby: its power report goes from on to standby.
         adb.foreground = TV_FRONT;
