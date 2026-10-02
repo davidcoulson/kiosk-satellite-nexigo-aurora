@@ -66,6 +66,9 @@ public final class AuroraPlugin implements KioskPlugin {
     /** The input last selected through this plugin: the pass-through URI does not update the
      *  vendor's property, so this is what Input shows until a read says otherwise. */
     private String commandedInput;
+    /** The input on the wall, read from Android's TV input service each poll; null when no HDMI
+     *  input is held (an app in front) or the read is not possible. Wins over everything else. */
+    private volatile String liveInput;
     /** Whether the last picture command from here was "off": the flag below is kept for it. */
     private boolean commandedPictureOff;
     /** The bar cannot be read back; this is what was last asked of it. */
@@ -392,10 +395,15 @@ public final class AuroraPlugin implements KioskPlugin {
         if (changed) poll();
     }
 
-    /** The HDMI port on the wall: the input last picked through this plugin, else the vendor's
-     *  property (which a pass-through switch leaves behind). Null when unknown. */
+    /** The input on the wall: Android's own reading when there is one, else the input last
+     *  picked through this plugin, else the vendor's property. */
+    private String inputNow(Projector.State s) {
+        return liveInput != null ? liveInput : commandedInput != null ? commandedInput : s.input();
+    }
+
+    /** The HDMI port on the wall, or null when unknown. */
     private Integer currentPort() {
-        return Projector.portOf(commandedInput != null ? commandedInput : last.input());
+        return Projector.portOf(inputNow(last));
     }
 
     /** A source went to sleep (Standby): the projector ignores it for its own power, so the
@@ -431,7 +439,7 @@ public final class AuroraPlugin implements KioskPlugin {
         if (cecRunner != null) {
             Shell.Result r = cecRunner.run(Projector.SHOWING_SCRIPT, 4000);
             if (r.ok()) {
-                showing = Projector.showing(Projector.foregroundPackage(r.stdout), commandedInput != null ? commandedInput : s.input(), Projector.cecDevices(r.stdout));
+                showing = Projector.showing(Projector.foregroundPackage(r.stdout), inputNow(s), Projector.cecDevices(r.stdout));
                 Map<Integer, String> names = Projector.cecNames(r.stdout);
                 if (!names.isEmpty()) cecNames = names;
                 Map<Integer, Integer> ports = Projector.cecPorts(r.stdout);
@@ -582,8 +590,20 @@ public final class AuroraPlugin implements KioskPlugin {
                 break;
             }
         }
+        readLiveInput();
         publish(s);
         publishStatus(s);
+    }
+
+    /** Which HDMI input the TV app holds, through the shell-user channel. */
+    private void readLiveInput() {
+        Shell.Runner r = cecRunner;
+        if (r == null) return;
+        Shell.Result lr = r.run(Projector.LIVE_INPUT_SCRIPT, 4000);
+        if (!lr.ok()) return;
+        Integer p = Projector.livePort(lr.stdout);
+        liveInput = p == null ? null : Projector.INPUTS[p - 1];
+        if (liveInput != null) commandedInput = null;   // the projector's own reading replaces the memory
     }
 
     private void fill(Projector.State s, String key, String field) {
@@ -600,7 +620,7 @@ public final class AuroraPlugin implements KioskPlugin {
         }
         if (commandedInput != null && s.sourceId != null && !s.sourceId.equals(sourceAtCommand)) commandedInput = null;
         followObservedLight(s.light);
-        host.publishSelect("input", "Input", Projector.INPUTS, commandedInput != null ? commandedInput : s.input());
+        host.publishSelect("input", "Input", Projector.INPUTS, inputNow(s));
         host.publishBinarySensor("stays_on", "Stays on when the source sleeps", "", s.staysOn());
         host.publishSelect("picture_mode", "Picture mode", Projector.PICTURE_MODES, s.pictureModeLabel());
         // What the laser is doing, as best this plugin can tell (the flags corrected by the HAL's
@@ -630,7 +650,7 @@ public final class AuroraPlugin implements KioskPlugin {
         }
         StringBuilder text = new StringBuilder();
         text.append(s.light == null ? "Picture unknown" : (s.light ? "Picture on" : (Boolean.TRUE.equals(s.screenOff) ? "Screen off" : "Picture off")));
-        String input = commandedInput != null ? commandedInput : s.input();
+        String input = inputNow(s);
         if (input != null) text.append(" · ").append(input);
         if (s.pictureModeLabel() != null) text.append(" · ").append(s.pictureModeLabel());
         if (s.laserMinutes != null) text.append(String.format(Locale.ROOT, " · %.1f laser hours", s.laserMinutes / 60.0));

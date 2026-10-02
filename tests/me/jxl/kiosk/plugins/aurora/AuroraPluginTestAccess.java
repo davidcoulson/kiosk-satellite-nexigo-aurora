@@ -142,7 +142,7 @@ public final class AuroraPluginTestAccess {
         assert !Adb.shellService(Projector.CEC_LOG_START_SCRIPT).contains(";;") && !Adb.shellService(Projector.cecLogAppendScript(java.util.Arrays.asList("a"))).contains(";;") : "log scripts";
         assert Adb.shellService("echo a;").equals("shell:echo a; echo " + Adb.MARK + "$?") : Adb.shellService("echo a;");
         for (String script : new String[] {Projector.POLL_SCRIPT, Projector.TEMPS_SCRIPT, Projector.CEC_SCRIPT,
-                Projector.SHOWING_SCRIPT, Projector.FOREGROUND_SCRIPT, Projector.STAY_ON_SCRIPT, Projector.SHIZUKU_START_SCRIPT}) {
+                Projector.SHOWING_SCRIPT, Projector.LIVE_INPUT_SCRIPT, Projector.FOREGROUND_SCRIPT, Projector.STAY_ON_SCRIPT, Projector.SHIZUKU_START_SCRIPT}) {
             assert !Adb.shellService(script).contains(";;") : "';;' in the ADB line for: " + script;
         }
         long[] c0 = Projector.cpuTimes("cpu  100 0 50 800 50 0 0 0 0 0"), c1 = Projector.cpuTimes("cpu  130 0 70 1040 60 0 0 0 0 0");
@@ -396,7 +396,11 @@ public final class AuroraPluginTestAccess {
             + "    [R] time=2026-09-27 16:55:58 message=<Report Power Status> src: 5, dst: 0, params: 00\n"
             + "    [R] time=2026-09-27 16:56:01 message=<Set System Audio Mode> src: 5, dst: 15, params: 00\n";
         final List<String> appended = Collections.synchronizedList(new ArrayList<String>());
+        /** The HDMI port the TV app holds (Android's TV input service), 0 for none. */
+        volatile int live = 0;
         @Override public Shell.Result run(String script, int timeoutMs) {
+            if (script.equals(Projector.LIVE_INPUT_SCRIPT)) { scripts.add(script); return new Shell.Result(0, live == 0 ? ""
+                : "    " + (live + 4) + ": Connection{ mHardwareInfo: TvInputHardwareInfo {id=" + (live + 4) + ", type=9, hdmi_port=" + live + ", cable_connection_status=0}, mInfo: null, mCallback: x, mConfigs: [], mCallingUid: 1000, mResolvedUserId: 0 }\n", "", false); }
             if (script.equals(Projector.CEC_SCRIPT)) { scripts.add(script); return new Shell.Result(0, history, "", false); }
             if (script.equals(Projector.FOREGROUND_SCRIPT)) { scripts.add(script); return new Shell.Result(0, foreground, "", false); }
             if (script.equals(Projector.CEC_LOG_START_SCRIPT)) { scripts.add(script); return new Shell.Result(0, previousBoot, "", false); }
@@ -409,6 +413,10 @@ public final class AuroraPluginTestAccess {
 
     /** HDMI-CEC: the history parses, only new messages count, and the picture follows the source. */
     static void cec() throws Exception {
+        // The input on the wall, from Android's TV input service (2026-10-01, the Apple TV on HDMI 1).
+        String held = "    5: Connection{ mHardwareInfo: TvInputHardwareInfo {id=5, type=9, audio_type=-2147483616, audio_addr=, hdmi_port=1, cable_connection_status=0}, mInfo: TvInputInfo{id=com.mediatek.tvinput/.hdmi.HDMIInputService/HDMI110004, pkg=com.mediatek.tvinput, service=com.mediatek.tvinput.hdmi.HDMIInputService}, mCallback: android.media.tv.ITvInputHardwareCallback$Stub$Proxy@f99cf2c, mConfigs: [TvStreamConfig {mStreamId=0;mType=1;mGeneration=0}], mCallingUid: 1000, mResolvedUserId: 0 }\n";
+        assert Integer.valueOf(1).equals(Projector.livePort(held)) : "live port: " + Projector.livePort(held);
+        assert Projector.livePort("") == null : "nothing held";
         List<Projector.Cec> old = Projector.parseCec(CEC_OLD);
         assert old.size() == 3 && !old.get(0).received && old.get(2).sleeps() : "parse: " + old.size();
         List<Projector.Cec> woke = Projector.parseCec(CEC_OLD + CEC_WAKE);
@@ -464,16 +472,19 @@ public final class AuroraPluginTestAccess {
 
         // Another input on the wall (the Unraid VM on HDMI 3): the Apple TV (HDMI 2) sleeping
         // leaves it alone, and the Apple TV waking takes the projector to HDMI 2.
+        // The vendor's property still says HDMI 2; Android's TV input service says HDMI 3 and wins.
         adb.foreground = TV_FRONT;
-        direct.pollAnswer = POLL_ANSWER.replace("source=6", "source=7");
+        adb.live = 3;
         plugin.execute("refresh", Collections.<String, Object>emptyMap());
         waitUntil(new Check() { public boolean ok() { return "HDMI 3".equals(host.texts.get("showing")); } }, "showing HDMI 3: " + host.texts.get("showing"));
+        assert "HDMI 3".equals(host.selects.get("input")) : "the input select follows the projector: " + host.selects.get("input");
         int offsVm = Collections.frequency(direct.scripts, Projector.pictureScript(false));
         adb.history = adb.history + CEC_SLEEP.replace("03:10:02", "03:25:02");
         waitUntil(new Check() { public boolean ok() { return adb.appended.toString().contains("picture left on"); } }, "noted: " + adb.appended);
         assert Collections.frequency(direct.scripts, Projector.pictureScript(false)) == offsVm : "the VM's picture stays on";
         adb.history = adb.history + CEC_WAKE.replace("02:58:36", "03:26:36");
         waitUntil(new Check() { public boolean ok() { return direct.scripts.toString().contains("HW6"); } }, "to the Apple TV's input on its wake");
+        adb.live = 2;
         direct.pollAnswer = POLL_ANSWER;
         plugin.execute("refresh", Collections.<String, Object>emptyMap());
         Thread.sleep(300);

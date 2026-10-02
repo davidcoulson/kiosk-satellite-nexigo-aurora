@@ -617,6 +617,28 @@ final class Projector {
 
     private static final Pattern CEC_PORT = Pattern.compile("logical_address: 0x([0-9A-Fa-f]+) .*?port_id: (-?\\d+)");
 
+    /** The HDMI hardware the TV app holds right now, from Android's TV input service: the input
+     *  actually on the wall. The vendor's cur.prj.currentSourceId only follows its own menu (on
+     *  2026-10-01 it said HDMI 3 after the Apple TV had taken the projector to HDMI 1 over CEC), and
+     *  what this plugin last asked for is forgotten at a restart. No line: no HDMI input held (an
+     *  app is in front). Needs the shell user (dumpsys). */
+    static final String LIVE_INPUT_SCRIPT = "dumpsys tv_input | grep 'Connection{ mHardwareInfo' | grep 'mCallingUid: [0-9]'; true";
+
+    /** The port (1-4) in LIVE_INPUT_SCRIPT's output, or null. */
+    static Integer livePort(String output) {
+        if (output == null) return null;
+        for (String line : output.split("\n")) {
+            Matcher m = LIVE_PORT.matcher(line);
+            if (m.find()) {
+                int p = Integer.parseInt(m.group(1));
+                if (p >= 1 && p <= 4) return p;
+            }
+        }
+        return null;
+    }
+
+    private static final Pattern LIVE_PORT = Pattern.compile("hdmi_port=(\\d+).*mCallingUid: \\d+");
+
     /** "HDMI 3" to 3, anything else to null. */
     static Integer portOf(String input) {
         if (input == null) return null;
