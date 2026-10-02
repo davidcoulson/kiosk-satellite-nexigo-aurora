@@ -331,19 +331,16 @@ public final class AuroraPluginTestAccess {
      *  which climbs with the laser cold, decides nothing. */
     static void heat() throws Exception {
         Projector.State cold = parseWith(27, 23), hot = parseWith(53, 23), cooling = parseWith(45, 23);
-        assert Boolean.FALSE.equals(Projector.laserLit(cold, 28.0)) : "near ambient is dark";
+        assert Projector.laserLit(cold, 28.0) == null : "the heat never says dark";
         assert Boolean.TRUE.equals(Projector.laserLit(hot, 40.0)) : "hot and heating is lit";
         assert Projector.laserLit(hot, 53.0) == null : "hot and steady defers to the flag";
         assert Projector.laserLit(parseWith(41, 23), 41.0) == null : "a cooling plateau is not lit";
         assert Projector.laserLit(parseWith(42, 23), 41.0) == null : "one degree of noise is not heating";
         assert Projector.laserLit(hot, null) == null : "no trend on the first read";
         assert Projector.laserLit(cooling, 53.0) == null : "hot and cooling defers to the flag";
-        assert Boolean.FALSE.equals(Projector.laserLit(parseWith(33, 23), 33.0)) : "an idle laser 10 over ambient is dark";
-        assert Projector.laserLit(parseWith(33, 23), 30.0) == null : "warming from cold is not yet lit, nor dark";
-        // 2026-09-30 11:55: lit at 59, then 53 thirty seconds later, the flags still on.
-        assert Boolean.FALSE.equals(Projector.laserLit(parseWith(53, 24), 59.0, 59.0)) : "falling fast from its peak is dark";
-        assert Projector.laserLit(parseWith(57, 24), 58.0, 59.0) == null : "a lit laser's wander is not";
-        assert Projector.laserLit(parseWith(53, 24), 52.0, 59.0) == null : "warming again is not dark";
+        assert Projector.laserLit(parseWith(33, 23), 30.0) == null : "warming from cold is not yet lit";
+        // 2026-10-01 20:10: lit at 65, 59 thirty seconds later as an input came up dark. Still lit.
+        assert Projector.laserLit(parseWith(59, 24), 65.0) == null : "a dimming laser is not dark";
         assert Projector.laserLit(Projector.parse("light=false\nscreenoff=true\n"), 30.0) == null : "no log, no say";
 
         FakeShell shell = new FakeShell();
@@ -562,7 +559,7 @@ public final class AuroraPluginTestAccess {
 
         // Relit while still hot: the heat barely moves, but the HAL's own command gives it away.
         FakeShell hot = new FakeShell();
-        hot.pollAnswer = darkAt(60, 23).replace("light=false", "light=false\nheld=true\nls=1790500677085 On");
+        hot.pollAnswer = darkAt(60, 23).replace("light=false", "light=false\nheld=true\nls=" + System.currentTimeMillis() + " On");
         FakeHost host4 = new FakeHost();
         AuroraPlugin plugin4 = new AuroraPlugin(hot, null);
         plugin4.start(host4, settings("Direct", 30));
@@ -582,17 +579,29 @@ public final class AuroraPluginTestAccess {
         assert remote.scripts.contains(Projector.reflagLightScript(true)) : "flags brought in line";
         plugin5.stop();
 
-        // An On from hours ago against a laser at ambient: the command is old news, the heat wins.
+        // An On from hours ago, the flags dark: old news, the flags stand.
         FakeShell stale = new FakeShell();
-        stale.pollAnswer = POLL_ANSWER.replace("NtcBlueLaser1:55", "NtcBlueLaser1:33") + "ls=1790500677085 On\n";
+        stale.pollAnswer = darkAt(33, 23) + "ls=1790500677085 On\n";
         FakeHost host6 = new FakeHost();
         AuroraPlugin plugin6 = new AuroraPlugin(stale, null);
         plugin6.start(host6, settings("Direct", 30));
         waitFor(host6, "picture");
-        assert Boolean.FALSE.equals(host6.switches.get("picture")) : "an old On does not outvote a cold laser: " + host6.switches.get("picture");
-        assert stale.scripts.contains(Projector.reflagLightScript(false)) : "flags brought in line";
-        assert stale.scripts.toString().contains("[P] time=") && stale.scripts.toString().contains("laser dark behind the flags, by heat") : "the decision is noted on storage";
+        assert Boolean.FALSE.equals(host6.switches.get("picture")) : "an old On does not outvote the flags: " + host6.switches.get("picture");
+        assert !stale.scripts.contains(Projector.reflagLightScript(true)) : "flags left alone";
         plugin6.stop();
+
+        // A lit picture whose laser cools fast (a dark input coming up) stays lit.
+        FakeShell dim = new FakeShell();
+        dim.pollAnswer = POLL_ANSWER.replace("NtcBlueLaser1:55", "NtcBlueLaser1:65");
+        FakeHost host7 = new FakeHost();
+        AuroraPlugin plugin7 = new AuroraPlugin(dim, null);
+        plugin7.start(host7, settings("Direct", 30));
+        waitFor(host7, "picture");
+        refreshAnswer(plugin7, dim, POLL_ANSWER.replace("NtcBlueLaser1:55", "NtcBlueLaser1:59"));
+        refreshAnswer(plugin7, dim, POLL_ANSWER.replace("NtcBlueLaser1:55", "NtcBlueLaser1:49"));
+        assert Boolean.TRUE.equals(host7.switches.get("picture")) && Boolean.TRUE.equals(host7.binary.get("laser")) : "dimming is not dark";
+        assert !dim.scripts.contains(Projector.reflagLightScript(false)) : "flags left alone";
+        plugin7.stop();
 
         // The same dark without the note (the power menu, the sleep timer) is only recorded.
         FakeShell other = new FakeShell();

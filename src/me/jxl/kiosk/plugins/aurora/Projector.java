@@ -205,16 +205,10 @@ final class Projector {
      *  plateau must not read as lit. */
     static final double LIT_OVER_AMBIENT = 12;
     static final double HEATING_STEP = 2;
-    /** Within this much of ambient and not heating: dark. A dark laser idles 7-12 °C over ambient
-     *  (the DLP board's heat); a lit one is 25 °C over within three minutes and 30-37 °C over once
-     *  settled. Was 8, which an idle laser never reached: on 2026-09-30 the laser went dark at
-     *  11:55 behind lit flags and the picture read on for three hours. */
-    static final double DARK_OVER_AMBIENT = 15;
-    /** This far under its recent peak and still falling: dark. A laser switching off drops 6-9 °C
-     *  in the first 30 s; a lit one holds within a degree or two. */
-    static final double COOLING_DROP = 6;
-    /** How far back the recent peak looks. */
-    static final long PEAK_WINDOW_MS = 150_000L;
+    /** The heat never says dark. The laser dims with the picture: a dark scene, an input
+     *  switching or a black screen cools it 6 °C in 30 s and can leave it near idle for hours
+     *  (2026-10-01 20:10: an Unraid desktop coming up on HDMI 2 read as "laser off" and lit the
+     *  standby LEDs over a lit picture). Dark comes from the flags or the HAL's own Off. */
     /** How long after a picture command the heat is not trusted: the log line can be 30 s old and
      *  the laser takes a minute or more to warm or cool across the thresholds. */
     static final long LASER_SETTLE_MS = 180_000L;
@@ -222,25 +216,14 @@ final class Projector {
      *  is put back out rather than reported: the start itself is what lit it. */
     static final long RESTART_GUARD_MS = 300_000L;
 
-    static Boolean laserLit(State s, Double previousBlue) { return laserLit(s, previousBlue, null); }
-
     /**
-     * What the laser's heat says about the light: true when well over ambient and heating (a
-     * laser lit behind the flags' back); false when near ambient and not heating, or falling
-     * fast from its recent peak (a laser switched off behind the flags' back); null when it
-     * cannot tell (no log, no previous reading, warming from cold, or hot and steady). A steady
-     * hot laser says nothing: the flag already agrees with it unless the plugin started after
-     * it was lit.
+     * What the laser's heat says about the light: true when well over ambient and heating fast (a
+     * laser lit behind the flags' back), otherwise null. Never false: see above.
      */
-    static Boolean laserLit(State s, Double previousBlue, Double recentPeak) {
+    static Boolean laserLit(State s, Double previousBlue) {
         Double blue = s.temperatures.get(LASER_NTC), ambient = s.temperatures.get(AMBIENT_NTC);
-        if (blue == null || ambient == null) return null;
-        double over = blue - ambient;
-        boolean heating = previousBlue != null && blue - previousBlue >= HEATING_STEP;
-        if (heating) return over >= LIT_OVER_AMBIENT ? Boolean.TRUE : null;
-        if (over <= DARK_OVER_AMBIENT) return Boolean.FALSE;
-        if (recentPeak != null && previousBlue != null && blue <= previousBlue && recentPeak - blue >= COOLING_DROP) return Boolean.FALSE;
-        return null;
+        if (blue == null || ambient == null || previousBlue == null) return null;
+        return blue - ambient >= LIT_OVER_AMBIENT && blue - previousBlue >= HEATING_STEP ? Boolean.TRUE : null;
     }
 
     /** The light engine's NTC names as the HAL logs them, and the entity keys they become. The
