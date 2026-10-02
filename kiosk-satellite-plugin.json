@@ -3,7 +3,7 @@
   "apiVersion": 1,
   "id": "nexigo-aurora",
   "name": "NexiGo Aurora Pro",
-  "version": "0.3.10",
+  "version": "0.4.0",
   "minAndroidSdk": 24,
   "entryClass": "me.jxl.kiosk.plugins.aurora.AuroraPlugin",
   "description": "Runs on the NexiGo Aurora Pro projector's own Android and puts the projector on this kiosk's Home Assistant device: a Picture switch that blanks the laser the way the projector's power menu does (fans stop, Android stays awake, back in a second), Input and Picture mode selects, laser hours and light-engine temperatures, and buttons that open the projector's settings app (keystone, focus) and drive the front LED bar. Uses the vendor's projector-test tool and system properties; no root. Shizuku is optional and only adds the temperature readings.",
@@ -23,6 +23,18 @@
       "max": 300,
       "step": 5,
       "default": 30,
+      "unit": "s",
+      "group": "Projector"
+    },
+    {
+      "key": "vendorSeconds",
+      "type": "number",
+      "title": "Read the signal and fans every",
+      "description": "How often the plugin reads the vendor's own API through its helper: the incoming signal and its format, the real fan speeds, laser brightness, dynamic black, 24p, tone mapping and low latency. Each read starts MediaTek's TV library, which takes about ten seconds, on its own thread.",
+      "min": 30,
+      "max": 600,
+      "step": 10,
+      "default": 60,
       "unit": "s",
       "group": "Projector"
     },

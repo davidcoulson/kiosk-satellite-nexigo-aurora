@@ -75,6 +75,7 @@ public final class AuroraPluginTestAccess {
         guard();
         framework();
         arcAudio();
+        vendor();
         fallback();
         loopback();
     }
@@ -694,6 +695,71 @@ public final class AuroraPluginTestAccess {
         assert "Standard".equals(host.selects.get("picture_mode")) : "picture mode from the framework: " + host.selects.get("picture_mode");
         assert "HDMI 2".equals(host.selects.get("input")) : "boot source from the framework: " + host.selects.get("input");
         assert host.binary.get("stays_on") == null : "cec unknown keeps stays-on unknown";
+        plugin.stop();
+    }
+
+    /** The vendor's own API through the helper: parsing, the format line, the options, and the
+     *  plugin publishing what it reads and carrying settings out. */
+    static void vendor() throws Exception {
+        Map<String, String> v = Projector.parseVendor("fans=1040,1180\nbrightness=0\nerror.res=boom\nsignal=true\nhdr=1\ncolor_depth=10\nres=3840x2160,24,p\n");
+        assert "1040,1180".equals(v.get("fans")) && !v.containsKey("error.res") : "parsed: " + v;
+        assert "3840\u00d72160p 24 Hz \u00b7 HDR10 \u00b7 10-bit".equals(Projector.videoFormat(v)) : "format: " + Projector.videoFormat(v);
+        v.put("res", "3840x2160,23976,p"); v.put("hdr", "3");
+        assert "3840\u00d72160p 23.976 Hz \u00b7 Dolby Vision \u00b7 10-bit".equals(Projector.videoFormat(v)) : "format: " + Projector.videoFormat(v);
+        v.put("signal", "false");
+        assert "No signal".equals(Projector.videoFormat(v)) : "no signal";
+        assert Projector.videoFormat(Projector.parseVendor("fans=1\n")) == null : "no signal read, nothing to say";
+
+        java.util.Random random = new java.util.Random(1);
+        for (int n : new int[] {0, 1, 2, 3, 999, 1000}) {
+            byte[] data = new byte[n];
+            random.nextBytes(data);
+            assert AuroraPlugin.base64(data).equals(java.util.Base64.getEncoder().encodeToString(data)) : "base64 of " + n;
+        }
+
+        Map<String, Object> eco = new HashMap<>(); eco.put("option", "ECO");
+        assert AuroraPlugin.vendorValue("select.brightness_mode", eco) == 2 : "ECO is 2";
+        Map<String, Object> on = new HashMap<>(); on.put("on", true);
+        assert AuroraPlugin.vendorValue("switch.cinema_24p", on) == Projector.P24_ON : "24p on is 2";
+        assert AuroraPlugin.vendorValue("switch.low_latency", on) == 1 : "a switch is 1";
+
+        final String path = "/data/local/tmp/aurora-vendor-test.dex";
+        final String quick = "fans=1040,1180,1237,1040\nbrightness=0\ndb=2\np24=0\ndhdr=1\nlow_latency=false\nbody_detect=true\ncolor_depth=8\n";
+        final FakeAdb adb = new FakeAdb() {
+            volatile int brightness = 0;
+            @Override public Shell.Result run(String script, int timeoutMs) {
+                if (script.startsWith("CLASSPATH=" + path + " ")) {
+                    scripts.add(script);
+                    if (script.contains(" set brightness ")) brightness = Integer.parseInt(script.replaceAll(".* set brightness (\\d+).*", "$1"));
+                    String q = quick.replace("brightness=0", "brightness=" + brightness);
+                    return new Shell.Result(0, script.contains(" read") ? q + "signal=true\nhdr=0\nres=1920x1080,60,p\n" : q, "", false);
+                }
+                return super.run(script, timeoutMs);
+            }
+        };
+        FakeShell direct = new FakeShell();
+        direct.pollAnswer = POLL_ANSWER.replace("light=true", "light=true\neye=false");
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(direct, null, new AuroraPlugin.AdbFactory() { @Override public Shell.Runner create(int port) { return adb; } });
+        plugin.useVendor(path);
+        plugin.start(host, settings("Auto", 30));
+        waitUntil(new Check() { public boolean ok() { return "Standard".equals(host.selects.get("brightness_mode")); } }, "brightness read: " + host.selects);
+        assert "Level 2".equals(host.selects.get("dynamic_black")) : "dynamic black: " + host.selects.get("dynamic_black");
+        assert Boolean.FALSE.equals(host.switches.get("cinema_24p")) && Boolean.TRUE.equals(host.switches.get("dynamic_tone_mapping")) && Boolean.FALSE.equals(host.switches.get("low_latency")) : "switches: " + host.switches;
+        assert Double.valueOf(1237).equals(host.sensors.get("fan3_rpm")) : "fan 3: " + host.sensors.get("fan3_rpm");
+        assert Boolean.TRUE.equals(host.binary.get("signal")) : "signal";
+        assert "1920\u00d71080p 60 Hz \u00b7 SDR".equals(host.texts.get("video_format")) : "format: " + host.texts.get("video_format");
+        assert Boolean.FALSE.equals(host.binary.get("eye_protect")) : "eye protection read";
+
+        plugin.onEvent("select.brightness_mode", eco);
+        waitUntil(new Check() { public boolean ok() { return "ECO".equals(host.selects.get("brightness_mode")); } }, "brightness set and read back: " + adb.scripts);
+        assert adb.scripts.toString().contains(" set brightness 2") : "through the vendor's setter";
+        assert "1920\u00d71080p 60 Hz \u00b7 SDR".equals(host.texts.get("video_format")) : "a quick read keeps the signal";
+
+        direct.pollAnswer = POLL_ANSWER.replace("light=true", "light=true\neye=true");
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitUntil(new Check() { public boolean ok() { return Boolean.TRUE.equals(host.binary.get("eye_protect")); } }, "eye protection tripped");
+        waitUntil(new Check() { public boolean ok() { return adb.scripts.toString().contains("eye protection tripped"); } }, "noted");
         plugin.stop();
     }
 

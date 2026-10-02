@@ -170,6 +170,7 @@ final class Projector {
         "echo \"light=$(getprop cur.appo.light.enabled)\";"
         + " echo \"screenoff=$(getprop cur.prj.screenOff)\";"
         + " echo \"held=$(getprop " + HELD_PROP + ")\";"
+        + " echo \"eye=$(getprop cur.prj.inEyeProtect)\";"
         + " echo \"source=$(getprop cur.prj.currentSourceId)\";"
         + " echo \"mode=$(settings get global picture_mode 2>/dev/null)\";"
         + " echo \"minutes=$(" + TOOL + " getPlatformProperty used_time 2>/dev/null | grep -oE '[0-9]+' | tail -1)\";"
@@ -260,6 +261,9 @@ final class Projector {
         Integer sleepMode;
         /** This plugin turned the picture off and nothing has lit it since (see HELD_PROP). */
         Boolean heldOff;
+        /** The vendor's eye-protection flag: its body sensor saw someone in front of the lens and
+         *  has (or had) the light off. */
+        Boolean eyeProtect;
         /** The last AT+LightSource command in the HAL's log: true On, false Off, null none seen. */
         Boolean lightSource;
         /** When that command was logged (epoch ms), 0 when unknown. The log prunes busy
@@ -317,6 +321,7 @@ final class Projector {
                 case "nosignal": s.noSignalOff = integer(value); break;
                 case "sleep": s.sleepMode = integer(value); break;
                 case "held": s.heldOff = bool(value); break;
+                case "eye": s.eyeProtect = bool(value); break;
                 case "cpu": {
                     long[] c = cpuTimes(value);
                     if (c != null) { s.cpuBusy = c[0]; s.cpuTotal = c[1]; }
@@ -616,6 +621,90 @@ final class Projector {
     }
 
     private static final Pattern CEC_PORT = Pattern.compile("logical_address: 0x([0-9A-Fa-f]+) .*?port_id: (-?\\d+)");
+
+    /** Where the vendor helper (this plugin's own DEX, run by app_process as the shell user) is
+     *  kept; the hash in the name ties it to one plugin build. */
+    static String vendorDexPath(String hash) { return "/data/local/tmp/aurora-vendor-" + hash + ".dex"; }
+
+    /** Whether the helper for this build is already in place. */
+    static String vendorPresentScript(String path) { return "[ -s " + path + " ] && echo present; true"; }
+
+    /** One piece of the helper, as base64, appended to a staging file (the first piece starts it). */
+    static String vendorChunkScript(String path, String chunk, boolean first) {
+        return "printf '%s' '" + chunk + "' " + (first ? ">" : ">>") + " " + path + ".b64";
+    }
+
+    /** Decodes the staged helper into place and removes other builds' copies. */
+    static String vendorFinishScript(String path) {
+        return "base64 -d " + path + ".b64 > " + path + " && chmod 644 " + path + "; rm -f " + path + ".b64;"
+            + " for f in /data/local/tmp/aurora-vendor-*.dex; do [ \"$f\" = " + path + " ] || rm -f \"$f\"; done; [ -s " + path + " ] && echo present; true";
+    }
+
+    /** Runs the helper: quick, read, or set &lt;key&gt; &lt;value&gt;. */
+    static String vendorScript(String path, String args) {
+        return "CLASSPATH=" + path + " app_process /system/bin " + VendorTool.class.getName() + " " + args + " 2>/dev/null";
+    }
+
+    /** The helper's key=value output. */
+    static Map<String, String> parseVendor(String output) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (output == null) return out;
+        for (String line : output.split("\n")) {
+            int eq = line.indexOf('=');
+            if (eq > 0 && !line.startsWith("error.")) out.put(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
+        }
+        return out;
+    }
+
+    /** Laser brightness modes, as the projector's Brightness Mode menu lists them (0-2; 3 is
+     *  Brilliant Color, which NexiGo units hide). */
+    static final String[] BRIGHTNESS_MODES = {"Standard", "Brightest", "ECO"};
+    /** Dynamic black: the menu's Off, Dynamic Black 1, Dynamic Black 2. */
+    static final String[] DYNAMIC_BLACK = {"Off", "Level 1", "Level 2"};
+    /** 24p cinema mode as the vendor stores it: 2 on, 0 off. */
+    static final int P24_ON = 2;
+
+    /** MediaTek's HDR types (VIDEOINFO_HDR_TYPE_*). */
+    static String hdrName(Integer type) {
+        if (type == null) return null;
+        switch (type) {
+            case 0: return "SDR";
+            case 1: return "HDR10";
+            case 2: return "HLG";
+            case 3: return "Dolby Vision";
+            case 4: return "Technicolor HDR";
+            case 5: return "HDR10+";
+            default: return null;
+        }
+    }
+
+    /** "3840×2160p 24 Hz · HDR10 · 10-bit" from the helper's read, "No signal" without one, null
+     *  when it has nothing to say (no read, an app in front). The frame rate's unit is not
+     *  documented: whole hertz, or hundredths or thousandths of one, are all scaled to hertz. */
+    static String videoFormat(Map<String, String> v) {
+        if (v == null || !v.containsKey("signal")) return null;
+        if ("false".equals(v.get("signal"))) return "No signal";
+        String res = v.get("res");
+        StringBuilder sb = new StringBuilder();
+        if (res != null) {
+            String[] p = res.split(",");
+            String[] wh = p[0].split("x");
+            Integer w = integer(wh[0]), h = wh.length > 1 ? integer(wh[1]) : null;
+            if (w != null && h != null && w > 0 && h > 0) {
+                sb.append(w).append('\u00d7').append(h).append(p.length > 2 ? p[2] : "");
+                Integer f = p.length > 1 ? integer(p[1]) : null;
+                if (f != null && f > 0) {
+                    double hz = f > 1000 ? f / 1000.0 : f > 240 ? f / 100.0 : f;
+                    sb.append(' ').append(hz == Math.rint(hz) ? String.valueOf((long) hz) : String.format(java.util.Locale.ROOT, "%.3f", hz).replaceAll("0+$", "")).append(" Hz");
+                }
+            }
+        }
+        String hdr = hdrName(integer(v.get("hdr")));
+        if (hdr != null) sb.append(sb.length() > 0 ? " \u00b7 " : "").append(hdr);
+        Integer depth = integer(v.get("color_depth"));
+        if (depth != null && depth > 8) sb.append(" \u00b7 ").append(depth).append("-bit");
+        return sb.length() > 0 ? sb.toString() : "Signal";
+    }
 
     /** The HDMI hardware the TV app holds right now, from Android's TV input service: the input
      *  actually on the wall. The vendor's cur.prj.currentSourceId only follows its own menu (on

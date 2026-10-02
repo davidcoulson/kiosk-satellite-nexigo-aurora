@@ -40,6 +40,15 @@ public final class AuroraPlugin implements KioskPlugin {
     private ScheduledFuture<?> polling;
     /** Reads the HDMI-CEC history every few seconds on a shell-user channel (see watchCec). */
     private ScheduledFuture<?> cecWatch;
+    /** The vendor helper's own thread: its full read takes about ten seconds (MediaTek's TV
+     *  library starting), which must not hold up the polls or the CEC watch. */
+    private ScheduledExecutorService vendorWorker;
+    private ScheduledFuture<?> vendorReads;
+    /** The helper's DEX on the projector, once installed; null until then or without one. */
+    private volatile String vendorPath;
+    /** The helper's last read, key=value. */
+    private volatile Map<String, String> vendor = new HashMap<>();
+    private Boolean lastEyeProtect;
     private Shell.Runner cecRunner;
     private List<Projector.Cec> lastCec;
     /** Each source's last reported power (true on), by CEC logical address. */
@@ -149,6 +158,14 @@ public final class AuroraPlugin implements KioskPlugin {
         host.publishBinarySensor("stays_on", "Stays on when the source sleeps", "", null);
         host.publishSelect("front_leds", "Front LEDs", Projector.LEDS, null);
         host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1), null);
+        host.publishBinarySensor("eye_protect", "Eye protection", "", null);
+        vendorWorker = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+            @Override public Thread newThread(Runnable r) {
+                Thread t = new Thread(r, "nexigo-aurora-vendor");
+                t.setDaemon(true);
+                return t;
+            }
+        });
         submit(new Task() { @Override public void run() { detect(); } });
         schedule();
     }
@@ -243,6 +260,13 @@ public final class AuroraPlugin implements KioskPlugin {
                 poll();
             } });
             return;
+        } else if (VENDOR_EVENTS.containsKey(event)) {
+            final String key = VENDOR_EVENTS.get(event);
+            final int value = vendorValue(event, payload);
+            vendorWorker.execute(new Runnable() { @Override public void run() { safe(new Task() { @Override public void run() {
+                vendorRun("set " + key + " " + value, false);
+            } }); } });
+            return;
         } else if (event.equals("shizuku.state")) {
             submit(new Task() { @Override public void run() { detect(); } });
             return;
@@ -257,6 +281,8 @@ public final class AuroraPlugin implements KioskPlugin {
         alive.set(false);
         if (polling != null) polling.cancel(false);
         if (cecWatch != null) cecWatch.cancel(false);
+        if (vendorReads != null) vendorReads.cancel(false);
+        if (vendorWorker != null) vendorWorker.shutdownNow();
         if (worker != null) {
             worker.shutdownNow();
             worker.awaitTermination(1000, TimeUnit.MILLISECONDS);
@@ -310,6 +336,7 @@ public final class AuroraPlugin implements KioskPlugin {
         cecRunner = "direct".equals(channelName) ? extra : runner;
         poll();
         watchCec();
+        startVendor();
     }
 
     // ---- HDMI-CEC: the picture follows the source, on the projector itself ----
@@ -459,6 +486,158 @@ public final class AuroraPlugin implements KioskPlugin {
         } catch (UnsupportedOperationException e) {
             tilesSupported = false;   // an older Kiosk Satellite without Overview tiles
         }
+    }
+
+    // ---- The vendor's own API, through a helper process (VendorTool) ----
+
+    /** Home Assistant events the helper carries out, and the helper's name for each setting. */
+    private static final Map<String, String> VENDOR_EVENTS = new HashMap<>();
+    static {
+        VENDOR_EVENTS.put("select.brightness_mode", "brightness");
+        VENDOR_EVENTS.put("select.dynamic_black", "db");
+        VENDOR_EVENTS.put("switch.cinema_24p", "p24");
+        VENDOR_EVENTS.put("switch.dynamic_tone_mapping", "dhdr");
+        VENDOR_EVENTS.put("switch.low_latency", "low_latency");
+    }
+
+    /** The vendor's number for an option or a switch state. */
+    static int vendorValue(String event, Map<String, Object> payload) {
+        if (event.startsWith("select.")) {
+            String[] options = event.equals("select.brightness_mode") ? Projector.BRIGHTNESS_MODES : Projector.DYNAMIC_BLACK;
+            Object o = payload.get("option");
+            for (int i = 0; i < options.length; i++) if (options[i].equals(o)) return i;
+            throw new IllegalArgumentException("Unknown option " + o);
+        }
+        Object on = payload.get("on");
+        if (!(on instanceof Boolean)) throw new IllegalArgumentException("A switch wants a boolean");
+        if (event.equals("switch.cinema_24p")) return (Boolean) on ? Projector.P24_ON : 0;
+        return (Boolean) on ? 1 : 0;
+    }
+
+    /** Installs the helper (this plugin's own DEX) on the projector, reads once in full, and then
+     *  every vendorSeconds: quick values each time, the signal on every read. */
+    private void startVendor() {
+        if (vendorReads != null) vendorReads.cancel(false);
+        if (vendorWorker == null) return;
+        Object v = settings.get("vendorSeconds");
+        int seconds = v instanceof Number ? Math.max(30, Math.min(600, ((Number) v).intValue())) : 60;
+        vendorReads = vendorWorker.scheduleWithFixedDelay(new Runnable() {
+            @Override public void run() { safe(new Task() { @Override public void run() {
+                if (vendorPath == null) installVendor();
+                if (vendorPath != null) vendorRun("read", true);
+            } }); }
+        }, 0, seconds, TimeUnit.SECONDS);
+    }
+
+    /** Hook for tests: a helper already in place. */
+    void useVendor(String path) { vendorPath = path; }
+
+    private void installVendor() {
+        Shell.Runner r = cecRunner;
+        if (r == null) return;
+        byte[] dex = ownDex();
+        if (dex == null) return;
+        String path = Projector.vendorDexPath(sha1(dex).substring(0, 12));
+        Shell.Result present = r.run(Projector.vendorPresentScript(path), 4000);
+        if (present.ok() && present.stdout.contains("present")) { vendorPath = path; return; }
+        String b64 = base64(dex);
+        for (int i = 0; i < b64.length(); i += VENDOR_CHUNK) {
+            Shell.Result c = r.run(Projector.vendorChunkScript(path, b64.substring(i, Math.min(b64.length(), i + VENDOR_CHUNK)), i == 0), 10000);
+            if (!c.ok()) { host.log("Vendor helper install failed: " + c.why()); return; }
+        }
+        Shell.Result done = r.run(Projector.vendorFinishScript(path), 10000);
+        if (done.ok() && done.stdout.contains("present")) vendorPath = path;
+        else host.log("Vendor helper install failed: " + done.why());
+    }
+
+    /** Base64 pieces small enough for one shell command over the loopback ADB channel. */
+    static final int VENDOR_CHUNK = 16000;
+
+    /** This plugin's own DEX, from the jar its class loader reads (Kiosk Satellite's
+     *  DexClassLoader on plugin.jar); null when there is none (the tests). */
+    private static byte[] ownDex() {
+        ClassLoader cl = AuroraPlugin.class.getClassLoader();
+        try (java.io.InputStream in = cl == null ? null : cl.getResourceAsStream("classes.dex")) {
+            if (in == null) return null;
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[16384];
+            for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
+            return out.toByteArray();
+        } catch (java.io.IOException e) {
+            return null;
+        }
+    }
+
+    static String sha1(byte[] data) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (byte b : java.security.MessageDigest.getInstance("SHA-1").digest(data)) sb.append(String.format(Locale.ROOT, "%02x", b));
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** Standard base64; java.util.Base64 needs API 26 and the manifest allows 24. */
+    static String base64(byte[] data) {
+        final String abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        StringBuilder sb = new StringBuilder((data.length + 2) / 3 * 4);
+        for (int i = 0; i < data.length; i += 3) {
+            int b = (data[i] & 0xff) << 16 | (i + 1 < data.length ? (data[i + 1] & 0xff) << 8 : 0) | (i + 2 < data.length ? data[i + 2] & 0xff : 0);
+            sb.append(abc.charAt(b >> 18 & 63)).append(abc.charAt(b >> 12 & 63));
+            sb.append(i + 1 < data.length ? abc.charAt(b >> 6 & 63) : '=').append(i + 2 < data.length ? abc.charAt(b & 63) : '=');
+        }
+        return sb.toString();
+    }
+
+    /** Runs the helper and publishes what it read. A full read (with the signal) replaces the
+     *  last one; a quick one keeps its signal values. */
+    private void vendorRun(String args, boolean full) {
+        Shell.Runner r = cecRunner;
+        String path = vendorPath;
+        if (r == null || path == null) return;
+        Shell.Result res = r.run(Projector.vendorScript(path, args), 40000);
+        if (!res.ok()) { host.log("Vendor helper (" + args + ") failed: " + res.why()); return; }
+        Map<String, String> read = Projector.parseVendor(res.stdout);
+        if (read.isEmpty()) return;
+        if (!full) {
+            for (String k : new String[] {"signal", "hdr", "res", "max_cll"}) if (vendor.containsKey(k) && !read.containsKey(k)) read.put(k, vendor.get(k));
+        }
+        vendor = read;
+        publishVendor(read);
+    }
+
+    private void publishVendor(Map<String, String> v) {
+        if (!alive.get()) return;
+        Integer b = intOf(v.get("brightness"));
+        host.publishSelect("brightness_mode", "Laser brightness", Projector.BRIGHTNESS_MODES,
+            b != null && b >= 0 && b < Projector.BRIGHTNESS_MODES.length ? Projector.BRIGHTNESS_MODES[b] : null);
+        Integer db = intOf(v.get("db"));
+        host.publishSelect("dynamic_black", "Dynamic black", Projector.DYNAMIC_BLACK,
+            db != null && db >= 0 && db < Projector.DYNAMIC_BLACK.length ? Projector.DYNAMIC_BLACK[db] : null);
+        Integer p24 = intOf(v.get("p24"));
+        if (p24 != null) host.publishSwitch("cinema_24p", "24p cinema mode", p24 == Projector.P24_ON);
+        Integer dhdr = intOf(v.get("dhdr"));
+        if (dhdr != null) host.publishSwitch("dynamic_tone_mapping", "Dynamic tone mapping", dhdr != 0);
+        if (v.containsKey("low_latency")) host.publishSwitch("low_latency", "Low latency", "true".equals(v.get("low_latency")));
+        String fans = v.get("fans");
+        if (fans != null) {
+            String[] f = fans.split(",");
+            for (int i = 0; i < f.length; i++) {
+                Integer rpm = intOf(f[i]);
+                if (rpm != null) host.publishSensor("fan" + (i + 1) + "_rpm", "Fan " + (i + 1), sensorMeta("rpm", null, "measurement", 0), rpm.doubleValue());
+            }
+        }
+        // The signal belongs to the TV app's input: with an app in front there is none to report.
+        boolean tvFront = lastShowing == null || lastShowing.startsWith("HDMI");
+        if (v.containsKey("signal")) host.publishBinarySensor("signal", "Signal", "", tvFront ? "true".equals(v.get("signal")) : null);
+        String format = tvFront ? Projector.videoFormat(v) : null;
+        host.publishTextSensor("video_format", "Video format", format == null ? "" : format);
+    }
+
+    private static Integer intOf(String s) {
+        if (s == null) return null;
+        try { return Integer.valueOf(s.trim()); } catch (NumberFormatException e) { return null; }
     }
 
     /** What the Showing sensor last said, for the notes below. */
@@ -626,6 +805,13 @@ public final class AuroraPlugin implements KioskPlugin {
         // What the laser is doing, as best this plugin can tell (the flags corrected by the HAL's
         // light-source commands and the heat). Replaces the vendor's inverted "screen off" flag.
         host.publishBinarySensor("laser", "Laser status", "", s.light);
+        // The vendor's eye-protection flag: its body sensor cuts the light when someone is in front
+        // of the lens, which is a dark picture nobody here asked for. A change is noted.
+        host.publishBinarySensor("eye_protect", "Eye protection", "", s.eyeProtect);
+        if (s.eyeProtect != null && lastEyeProtect != null && !s.eyeProtect.equals(lastEyeProtect)) {
+            note(s.eyeProtect ? "eye protection tripped: the body sensor has the light off" : "eye protection cleared");
+        }
+        if (s.eyeProtect != null) lastEyeProtect = s.eyeProtect;
         host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1),
             s.laserMinutes == null ? null : s.laserMinutes / 60.0);
         // The speed appothermal commands (the same on every fan PWM); the fans have no tachometer.

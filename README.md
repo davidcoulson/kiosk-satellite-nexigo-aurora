@@ -74,6 +74,14 @@ appears in Home Assistant as an ESPHome device. This plugin adds the projector t
 | **Laser temperature** | sensor | The warmest of the red, green and blue laser banks: one number for the light engine's heat. |
 | **Last CEC message** | text sensor | The newest notable HDMI-CEC event, from Android's own CEC history (`dumpsys hdmi_control`, read every 2 s over the shell-user channel): a source waking (`Image View On from Apple TV`), sleeping (`Standby from Apple TV to all`, or `Apple TV went to standby` when its power report changes), switching inputs or passing remote keys. The projector's minute-by-minute power polling and discovery chatter are left out, and HA keeps the time. With **Picture follows the source** on (the default), a source waking turns the picture on and switches to its input (CEC One Touch Play), and a source's Standby turns it off unless an app on the projector is in use or the source is not on the input showing (the Apple TV sleeping leaves a game on HDMI 3 alone). A soundbar (the CEC audio system) going to standby leaves the picture alone. The projector ignores CEC standby for its own power, so this is how a sleeping Apple TV darkens it without Home Assistant. |
 | **CPU busy** | sensor | Real CPU use between two reads, from the kernel's `/proc/stat` counters. Kiosk Satellite's own CPU usage sensor can't read them from the app and, with no cpuidle on this chip, reports the CPU clock position instead (100 % whenever the governor holds 1.3 GHz). Also on the Projector tile. |
+| **Eye protection** | binary sensor | The vendor's eye-protection flag (`cur.prj.inEyeProtect`): its IR body sensor saw someone in front of the lens and has the light off. A dark picture nobody asked for; each change is noted. |
+| **Signal** / **Video format** | binary sensor / text sensor | Whether the input on the wall has a signal, and what it is: `3840×2160p 24 Hz · HDR10 · 10-bit`, or `No signal`. From MediaTek's TV library through the vendor helper (below), every *Read the signal and fans every* (60 s). Empty while an app is in front. |
+| **Fan 1-4** | sensors | Each fan's real speed in rpm, from the HAL (Fan speed above is the speed the thermal daemon asks for). |
+| **Laser brightness** | select | Standard, Brightest, ECO: the projector's Brightness Mode, set through the vendor's own setter, which also sets the laser drive currents and the fans' thermal target, exactly as the menu does. |
+| **Dynamic black** | select | Off, Level 1, Level 2. |
+| **24p cinema mode** | switch | The menu's 24p Cinema Mode. |
+| **Dynamic tone mapping** | switch | The picture menu's Dynamic Tone Mapping for HDR. |
+| **Low latency** | switch | The picture menu's Low Latency. DLP projectors often skip warping in their low-latency path; check that keystone still holds before relying on it. |
 | **Last correction** | text sensor | The newest decision the plugin took against the projector's own state: a laser lit behind the flags, ARC audio found off, a source's standby ignored because another input is showing. Home Assistant's history of it is the record of how often the plugin had to step in. |
 | **CEC before last boot** | text sensor | The last CEC messages the projector saw before it last booted, e.g. `16:56:01 Set System Audio Mode from JBL Bar1300M2 to all`. Standby is a cold boot that wipes Android's CEC history, so the plugin keeps a copy on storage (`/data/local/tmp/aurora-cec.log`, tagged with the boot id); after an unexpected standby this names what arrived just before. |
 | **Fan speed** | sensor | The speed the vendor's thermal daemon commands, in percent, from the same log (one value drives every fan PWM; the fans have no tachometer). |
@@ -86,6 +94,12 @@ Assistant device as buttons: **Open projector settings** (the projector's own ap
 brightness mode, projection mode...), **Picture off** / **Picture on** / **Picture on/off** (one
 button for a remote key), **Front LEDs off** /
 **Front LEDs: standby lights** and **Refresh readings**.
+
+The last six are the vendor's own Java API, the `com.appo.tv` classes every vendor app bundles on top of
+`com.appotronics.support.ProjectorManager`, called by a helper: `VendorTool`, a class in this plugin's own
+DEX, which the plugin copies to `/data/local/tmp/aurora-vendor-<hash>.dex` over the shell-user channel and
+runs with `app_process` (a quick read takes half a second; a read that includes the signal starts
+MediaTek's TV library, about ten seconds, on its own thread). Every value is read back from the projector.
 
 Every command is a fixed script run through `/system/bin/sh -c`; a Home Assistant option can only
 become one of the numbers in `Projector.java`. After each command the plugin reads the projector
