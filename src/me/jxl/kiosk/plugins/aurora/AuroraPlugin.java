@@ -130,6 +130,8 @@ public final class AuroraPlugin implements KioskPlugin {
      *  the projector says nothing about who holds the picture, so it is not read back over this
      *  plugin's own record (a dark for silence would otherwise forget it may come back). */
     private String pendingFlags;
+    /** The light those owed flags belong to: they are written only while the light still is that. */
+    private boolean pendingFlagsOn;
     /** stop() must return inside Kiosk Satellite's callback deadline (3 s). */
     private static final long STOP_WAIT_MS = 2000;
     private boolean laserPublished;
@@ -565,6 +567,7 @@ public final class AuroraPlugin implements KioskPlugin {
             if (!f.ok()) {
                 status(what + ": the light changed, but its flags could not be set via " + channelName + " (" + f.why() + "); trying again with each read", true);
                 pendingFlags = flags;
+                pendingFlagsOn = on;
             } else pendingFlags = null;
         } else pendingFlags = null;
         pendingOff = false;
@@ -926,7 +929,6 @@ public final class AuroraPlugin implements KioskPlugin {
 
     private void poll() {
         if (runner == null || !alive.get()) return;
-        if (pendingFlags != null && runner.run(pendingFlags, Shell.DEFAULT_TIMEOUT_MS).ok()) pendingFlags = null;
         Shell.Result r = runner.run(Projector.POLL_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         if (!r.ok()) { status("Could not read the projector via " + channelName + ": " + r.why(), true); return; }
         Projector.State s = Projector.parse(r.stdout);
@@ -1012,6 +1014,17 @@ public final class AuroraPlugin implements KioskPlugin {
                 if (heatSays) { s.screenOff = Boolean.FALSE; commandedPictureOff = false; darkForSilence = false; }
                 if (!alive.get()) return;
                 runner.run(Projector.reflagLightScript(heatSays), 4000);
+            }
+        }
+        // Owed flags, now that this read has settled what the light is: written while it is still
+        // the light they were for, dropped once it has changed since (a remote key, a source, the
+        // heat), so a dark's "screen off, held" is never written over a picture lit after it.
+        if (pendingFlags != null && alive.get()) {
+            if (Boolean.valueOf(pendingFlagsOn).equals(s.light)) {
+                if (runner.run(pendingFlags, Shell.DEFAULT_TIMEOUT_MS).ok()) { pendingFlags = null; s.screenOff = !pendingFlagsOn; }
+            } else {
+                pendingFlags = null;
+                note("the light changed before its flags could be written; the old flags were dropped");
             }
         }
         // Android waking its display (a Kiosk Satellite restart does it) clears cur.prj.screenOff

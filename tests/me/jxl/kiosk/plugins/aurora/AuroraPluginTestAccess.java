@@ -930,6 +930,31 @@ public final class AuroraPluginTestAccess {
             plugin.stop();
         }
 
+        // Owed flags for a dark are dropped, not written, once the light has been lit since.
+        {
+            final Lamp lamp = new Lamp();
+            lamp.live = 3;
+            FakeHost host = new FakeHost();
+            AuroraPlugin plugin = lampPlugin(lamp);
+            plugin.start(host, silenceSettings());
+            waitFor(host, "picture");
+            lamp.screenOffFails = true;
+            plugin.onEvent("switch.picture", Collections.<String, Object>singletonMap("on", false));
+            waitUntil(new Check() { public boolean ok() { return !lamp.light; } }, "laser off, flags owed");
+            Thread.sleep(300);
+            String heldBefore = lamp.held;
+            // Lit elsewhere (the projector's own key): laser and flag both on.
+            lamp.light = true;
+            lamp.flag = true;
+            lamp.screenOffFails = false;
+            final int before = lamp.scripts.size();
+            plugin.execute("refresh", Collections.<String, Object>emptyMap());
+            Thread.sleep(400);
+            for (String x : lamp.scripts.subList(before, lamp.scripts.size())) assert !x.equals(Projector.pictureFlagsScript(false, "true")) : "the old dark's flags are not written over a lit picture";
+            assert lamp.held.equals(heldBefore) && lamp.flag && lamp.light : "picture still lit, hold note untouched: " + lamp.held;
+            plugin.stop();
+        }
+
         // 3: after a restart the HAL relit a held-off laser; the corrective Off is refused. It is
         // retried on later reads until it works, not forgotten once the log line is consumed.
         {

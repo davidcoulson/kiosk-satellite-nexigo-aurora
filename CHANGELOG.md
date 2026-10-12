@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Plugin 0.4.7: owed flags are written only after the read has settled the light, and only
+  while it is still the light they were for; once it has changed (a remote key, a source, the
+  heat), they are dropped rather than written over it.
+
 - Plugin 0.4.6: a light change whose flags or hold note did not take keeps them owed and retries
   them before every read, and while they are owed the projector's stale note is not read over
   the plugin's own record: a dark for silence whose "silence" note failed still comes back with
