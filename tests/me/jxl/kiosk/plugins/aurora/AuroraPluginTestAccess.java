@@ -73,6 +73,7 @@ public final class AuroraPluginTestAccess {
         staleLightSource();
         cpu();
         steady();
+        noSignal();
         guard();
         framework();
         arcAudio();
@@ -533,6 +534,52 @@ public final class AuroraPluginTestAccess {
 
     /** A light-source command older than the plugin's own last picture command is ignored: the
      *  newer one was pruned from the log. */
+    /** A lit picture on a silent HDMI input goes dark after the set time and comes back with the
+     *  signal; a picture someone switched by hand is left alone. */
+    static void noSignal() throws Exception {
+        FakeShell shell = new FakeShell();
+        shell.pollAnswer = POLL_ANSWER;
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = new AuroraPlugin(shell, null);
+        plugin.silenceMinuteMs = 300;
+        Map<String, Object> st = settings("Direct", 30);
+        st.put("darkWithoutSignal", 1);
+        plugin.start(host, st);
+        waitFor(host, "picture");
+        final String off = Projector.pictureScript(false), on = Projector.pictureScript(true);
+        plugin.watchSignal(true);
+        plugin.watchSignal(false);                 // silent from here
+        Thread.sleep(150);
+        plugin.watchSignal(false);                 // half the time
+        assert !shell.scripts.contains(off) : "half the time is not enough";
+        plugin.watchSignal(null);                  // an app in front: no telling, the clock stops
+        plugin.watchSignal(false);                 // silent again from here
+        Thread.sleep(200);
+        plugin.watchSignal(false);                 // 350 ms since the first silence, 200 since this one
+        Thread.sleep(100);
+        assert !shell.scripts.contains(off) : "an app in front restarts the clock";
+        Thread.sleep(100);
+        plugin.watchSignal(false);                 // 400 ms of this silence
+        final FakeShell sh = shell;
+        waitUntil(new Check() { public boolean ok() { return sh.scripts.contains(off); } }, "silent past the minute: dark " + shell.scripts);
+        shell.pollAnswer = POLL_ANSWER.replace("light=true", "light=false");
+        plugin.execute("refresh", Collections.<String, Object>emptyMap());
+        waitUntil(new Check() { public boolean ok() { return Boolean.FALSE.equals(host.switches.get("picture")); } }, "dark read back");
+        plugin.watchSignal(true);
+        waitUntil(new Check() { public boolean ok() { return sh.scripts.contains(on); } }, "the signal brings it back");
+
+        // Switched off by hand: a returning signal leaves it dark.
+        int before = shell.scripts.size();
+        Map<String, Object> dark = new HashMap<>(); dark.put("on", false);
+        plugin.onEvent("switch.picture", dark);
+        waitUntil(new Check() { public boolean ok() { return sh.scripts.lastIndexOf(off) >= 0 && sh.scripts.lastIndexOf(off) > sh.scripts.lastIndexOf(on); } }, "switched off");
+        plugin.watchSignal(false);
+        plugin.watchSignal(true);
+        Thread.sleep(200);
+        assert shell.scripts.lastIndexOf(on) < before : "a picture switched off by hand stays off: " + shell.scripts.subList(before, shell.scripts.size());
+        plugin.stop();
+    }
+
     /** Wobble inside the step stays home; a real move, unknown, or old age goes out. */
     static void steady() {
         Steady st = new Steady();

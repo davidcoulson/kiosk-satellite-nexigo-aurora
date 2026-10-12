@@ -3,7 +3,7 @@
   "apiVersion": 1,
   "id": "nexigo-aurora",
   "name": "NexiGo Aurora Pro",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "minAndroidSdk": 24,
   "entryClass": "me.jxl.kiosk.plugins.aurora.AuroraPlugin",
   "description": "Runs on the NexiGo Aurora Pro projector's own Android and puts the projector on this kiosk's Home Assistant device: a Picture switch that blanks the laser the way the projector's power menu does (fans stop, Android stays awake, back in a second), Input and Picture mode selects, laser hours and light-engine temperatures, and buttons that open the projector's settings app (keystone, focus) and drive the front LED bar. Uses the vendor's projector-test tool and system properties; no root. Shizuku is optional and only adds the temperature readings.",
@@ -42,7 +42,7 @@
       "key": "stayOn",
       "type": "boolean",
       "title": "Stay on when the source sleeps",
-      "description": "Keeps the projector on the network around the clock: ignores the CEC standby a sleeping Apple TV or console broadcasts and turns off the no-signal shutdown. Pair it with an automation that turns Picture off when the source sleeps. Turning this off does not restore the projector's own settings.",
+      "description": "Keeps the projector on the network around the clock: ignores the CEC standby a sleeping Apple TV or console broadcasts and turns off the no-signal shutdown (the plugin darkens the picture itself instead; see Dark after no signal). Turning this off does not restore the projector's own settings.",
       "default": true,
       "group": "Projector"
     },
@@ -60,6 +60,18 @@
       "title": "Picture follows the source (HDMI-CEC)",
       "description": "Watches the projector's HDMI-CEC traffic: a source waking (Image View On, Active Source) turns the picture on and, when an app is in front, switches to its input; a source going to sleep (Standby) turns the picture off unless an app on the projector is in use. Needs the ADB or Shizuku channel. The last message received is always published as a sensor.",
       "default": true,
+      "group": "Projector"
+    },
+    {
+      "key": "darkWithoutSignal",
+      "type": "number",
+      "title": "Dark after no signal for",
+      "description": "Stay on also stops the projector's own no-signal shutdown, so a source that sleeps without HDMI-CEC (a PC, a VM) left the laser lighting a No signal screen. After this long with no signal on the HDMI input in front, the picture goes dark (Android and the network stay up) and comes back with the signal, unless the picture was switched since. 0 turns it off.",
+      "min": 0,
+      "max": 240,
+      "step": 5,
+      "default": 15,
+      "unit": "min",
       "group": "Projector"
     },
     {

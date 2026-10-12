@@ -82,6 +82,12 @@ public final class AuroraPlugin implements KioskPlugin {
     private volatile String liveInput;
     /** Whether the last picture command from here was "off": the flag below is kept for it. */
     private boolean commandedPictureOff;
+    /** No signal on the HDMI input in front since then (null: there is one, or the picture is
+     *  already dark), and whether the dark picture now is this plugin's doing for that reason. */
+    private Long silentSince;
+    private volatile boolean darkForSilence;
+    /** A minute, for the no-signal timer; tests shorten it. */
+    long silenceMinuteMs = 60_000;
     /** The bar cannot be read back; this is what was last asked of it. */
     private String commandedLeds;
     /** The light state the last read reported, so the bar can follow changes made elsewhere
@@ -183,8 +189,8 @@ public final class AuroraPlugin implements KioskPlugin {
         final String script;
         switch (command) {
             case "settings": script = Projector.openSettingsScript(); break;
-            case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; ledsForPicture(false); settleLight(); break;
-            case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; ledsForPicture(true); settleLight(); break;
+            case "pictureOff": script = Projector.pictureScript(false); commandedPictureOff = true; darkForSilence = false; ledsForPicture(false); settleLight(); break;
+            case "pictureOn": script = Projector.pictureScript(true); commandedPictureOff = false; darkForSilence = false; ledsForPicture(true); settleLight(); break;
             // One button for a remote key: dark when the picture shows, on otherwise (an unknown
             // light is treated as off, since that is the state a key press is meant to end).
             case "pictureToggle": execute(Boolean.TRUE.equals(lastLight) ? "pictureOff" : "pictureOn", arguments); return;
@@ -237,6 +243,7 @@ public final class AuroraPlugin implements KioskPlugin {
             if (!(on instanceof Boolean)) throw new IllegalArgumentException("Picture wants a boolean");
             script = Projector.pictureScript((Boolean) on);
             commandedPictureOff = !(Boolean) on;
+            darkForSilence = false;
             ledsForPicture((Boolean) on);
             settleLight();
         } else if (event.equals("select.input")) {
@@ -406,6 +413,7 @@ public final class AuroraPlugin implements KioskPlugin {
         if (!Boolean.TRUE.equals(lastLight)) {
             command(Projector.pictureScript(true), "Picture on");
             commandedPictureOff = false;
+            darkForSilence = false;
             ledsForPicture(true);
             settleLight();
             changed = true;
@@ -449,9 +457,54 @@ public final class AuroraPlugin implements KioskPlugin {
         }
         command(Projector.pictureScript(false), "Picture off");
         commandedPictureOff = true;
+        darkForSilence = false;
         ledsForPicture(false);
         settleLight();
         poll();
+    }
+
+    /** Stay on keeps the projector out of standby, and with it out of its own no-signal shutdown,
+     *  so a source that sleeps without CEC (the Unraid VM on HDMI 3) left the laser lighting a
+     *  "No signal" screen all day (2026-10-11: 16 hours). After darkWithoutSignal minutes with no
+     *  signal on the HDMI input in front the picture goes dark - Android and the network stay up -
+     *  and it comes back when the signal does, unless someone has touched the picture since.
+     *  signal is null when there is no telling (an app in front, or no read). */
+    void watchSignal(final Boolean signal) {
+        Object v = settings.get("darkWithoutSignal");
+        int minutes = v instanceof Number ? Math.max(0, Math.min(240, ((Number) v).intValue())) : 15;
+        if (signal == null || minutes == 0) { silentSince = null; return; }
+        if (signal) {
+            silentSince = null;
+            if (!darkForSilence) return;
+            darkForSilence = false;
+            submit(new Task() { @Override public void run() {
+                if (Boolean.TRUE.equals(lastLight) || !commandedPictureOff) return;
+                note("signal back on " + lastShowing + ": picture on");
+                command(Projector.pictureScript(true), "Picture on");
+                commandedPictureOff = false;
+                ledsForPicture(true);
+                settleLight();
+                poll();
+            } });
+            return;
+        }
+        if (!Boolean.TRUE.equals(lastLight)) { silentSince = null; return; }
+        long now = System.currentTimeMillis();
+        if (silentSince == null) silentSince = now;
+        if (now - silentSince < minutes * silenceMinuteMs) return;
+        silentSince = null;
+        final String input = lastShowing;
+        final int after = minutes;
+        submit(new Task() { @Override public void run() {
+            if (!Boolean.TRUE.equals(lastLight)) return;
+            note("no signal on " + input + " for " + after + " min: picture off");
+            command(Projector.pictureScript(false), "Picture off");
+            commandedPictureOff = true;
+            darkForSilence = true;
+            ledsForPicture(false);
+            settleLight();
+            poll();
+        } });
     }
 
     /** Remote Admin's Overview tiles (two at most) and the Showing sensor. */
@@ -654,6 +707,7 @@ public final class AuroraPlugin implements KioskPlugin {
         // The signal belongs to the TV app's input: with an app in front there is none to report.
         boolean tvFront = lastShowing == null || lastShowing.startsWith("HDMI");
         if (v.containsKey("signal")) host.publishBinarySensor("signal", "Signal", "", tvFront ? "true".equals(v.get("signal")) : null);
+        watchSignal(tvFront && v.containsKey("signal") ? Boolean.valueOf("true".equals(v.get("signal"))) : null);
         String format = tvFront ? Projector.videoFormat(v) : null;
         host.publishTextSensor("video_format", "Video format", format == null ? "" : format);
     }

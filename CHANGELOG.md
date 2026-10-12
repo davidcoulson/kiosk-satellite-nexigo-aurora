@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Plugin 0.4.3: Dark after no signal (default 15 min). Stay on keeps the projector out of standby,
+  which also stops its own no-signal shutdown, so a source that sleeps without HDMI-CEC (the
+  Unraid VM) left the laser lighting a No signal screen all day. After the set time with no
+  signal on the HDMI input in front the picture goes dark (Android and the network stay up), and
+  it comes back when the signal does, unless the picture was switched since. Each is noted in
+  Last correction.
+
 - Plugin 0.4.2: far fewer Home Assistant recorder rows (about 10.6k a day before, most of them
   wobble). Measured sensors are sent only on a real move or once they are old: CPU busy in whole
   percent on a 5-point move (5 min at most), fan tachometers on a 50 rpm move (30 min), fan
