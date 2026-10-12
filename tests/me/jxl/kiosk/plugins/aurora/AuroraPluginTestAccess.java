@@ -1016,9 +1016,10 @@ public final class AuroraPluginTestAccess {
             final List<String> refused = Collections.synchronizedList(new ArrayList<String>());
             FakeHost strict = new FakeHost() {
                 @Override public void executeShizuku(String[] command, int timeoutMs, final CommandCallback callback) {
-                    long now = System.currentTimeMillis();
+                    // As PluginShizuku.kt checks it: System.nanoTime, 250 ms, refused not queued.
+                    long now = System.nanoTime();
                     if (pending.get() > 0) { refused.add("busy"); throw new IllegalStateException("one at a time"); }
-                    if (now - lastStart.get() < 250) { refused.add("too soon " + (now - lastStart.get())); throw new IllegalStateException("too soon"); }
+                    if (lastStart.get() != 0 && now - lastStart.get() < 250_000_000L) { refused.add("too soon " + (now - lastStart.get()) / 1_000_000L + " ms"); throw new IllegalStateException("too soon"); }
                     lastStart.set(now);
                     pending.incrementAndGet();
                     new Thread(new Runnable() { public void run() {

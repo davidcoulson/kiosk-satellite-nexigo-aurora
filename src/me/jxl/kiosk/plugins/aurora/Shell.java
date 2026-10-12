@@ -189,8 +189,11 @@ final class Shell {
      *  starts (PluginShizuku.kt); a second one is refused, not queued. Every thread here (the
      *  worker, the vendor helper's) goes through this lock, one at a time, spaced out. */
     private static final java.util.concurrent.locks.ReentrantLock SHIZUKU = new java.util.concurrent.locks.ReentrantLock(true);
-    private static long shizukuLastStart;
-    static final long SHIZUKU_SPACING_MS = 250;
+    private static long shizukuLastStartNanos;
+    private static boolean shizukuStarted;
+    /** The host refuses a start within 250 ms of the last one (System.nanoTime); 300 leaves room
+     *  for the hop between this thread and its check (a CI runner once landed at 249 ms). */
+    static final long SHIZUKU_SPACING_MS = 300;
     /** How long a command may wait its turn: behind the longest one there is (the helper's read). */
     static final long SHIZUKU_QUEUE_MS = 35000;
 
@@ -207,10 +210,13 @@ final class Shell {
                     return Result.failure("interrupted");
                 }
                 try {
-                    long wait = shizukuLastStart + SHIZUKU_SPACING_MS - System.currentTimeMillis();
-                    if (wait > 0) Thread.sleep(wait);
+                    if (shizukuStarted) {
+                        long waitMs = (shizukuLastStartNanos + SHIZUKU_SPACING_MS * 1_000_000L - System.nanoTime() + 999_999L) / 1_000_000L;
+                        if (waitMs > 0) Thread.sleep(waitMs);
+                    }
                     if (epoch() != began) return Result.failure("stopped");
-                    shizukuLastStart = System.currentTimeMillis();
+                    shizukuLastStartNanos = System.nanoTime();
+                    shizukuStarted = true;
                     return once(script, timeoutMs);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();

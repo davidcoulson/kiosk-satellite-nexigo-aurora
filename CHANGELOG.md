@@ -5,7 +5,8 @@
 - Plugin 0.4.6: a light change whose flags or hold note did not take keeps them owed and retries
   them before every read, and while they are owed the projector's stale note is not read over
   the plugin's own record: a dark for silence whose "silence" note failed still comes back with
-  the signal.
+  the signal. Shizuku commands are spaced 300 ms apart on a monotonic clock (the host checks
+  250 ms with System.nanoTime; a wall-clock wait once landed at 249 ms).
 
 - Plugin 0.4.5: fixes from Codex's review of 0.4.4. The picture script undoes only a refused HAL
   call, back to the light flag's own previous value, and marks when the HAL changed the light, so
