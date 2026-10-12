@@ -557,7 +557,7 @@ public final class AuroraPluginTestAccess {
         volatile boolean light = true;        // the laser itself
         volatile boolean flag = true;         // cur.appo.light.enabled
         volatile String held = "";
-        volatile boolean halFails, screenOffFails;
+        volatile boolean halFails, screenOffFails, heldFails;
         /** Extra poll lines (an AT+LightSource from the HAL's log). */
         volatile String extraPoll = "";
         @Override public Shell.Result run(String script, int timeoutMs) {
@@ -575,7 +575,7 @@ public final class AuroraPluginTestAccess {
         private synchronized Shell.Result bash(String script) {
             String sh = "LASER=" + light + "; LIGHT=" + flag + "; SO=" + !flag + "; HELD='" + held + "'\n"
                 + "getprop() { case $1 in cur.appo.light.enabled) echo \"$LIGHT\";; cur.prj.screenOff) echo \"$SO\";; " + Projector.HELD_PROP + ") echo \"$HELD\";; esac; }\n"
-                + "setprop() { case $1 in cur.appo.light.enabled) LIGHT=$2;; cur.prj.screenOff) [ " + (screenOffFails ? 1 : 0) + " = 1 ] && return 1; SO=$2;; " + Projector.HELD_PROP + ") HELD=$2;; esac; }\n"
+                + "setprop() { case $1 in cur.appo.light.enabled) LIGHT=$2;; cur.prj.screenOff) [ " + (screenOffFails ? 1 : 0) + " = 1 ] && return 1; SO=$2;; " + Projector.HELD_PROP + ") [ " + (heldFails ? 1 : 0) + " = 1 ] && return 1; HELD=$2;; esac; }\n"
                 + "tool() { [ " + (halFails ? 1 : 0) + " = 1 ] && { echo 'HAL refused' >&2; return 1; }; LASER=$2; }\n"
                 + script.replace(Projector.TOOL, "tool") + "\n"
                 + "rc=$?; echo \"__lamp $rc $LASER $LIGHT $HELD\"\n";
@@ -894,12 +894,39 @@ public final class AuroraPluginTestAccess {
             Thread.sleep(300);
             int flagScripts = 0;
             for (String x : lamp.scripts) if (x.equals(Projector.pictureFlagsScript(false, "true"))) flagScripts++;
-            assert flagScripts == 1 : "the flags tried once more: " + flagScripts;
+            assert flagScripts >= 1 : "the flags tried again (and with each read while they fail): " + flagScripts;
             assert host.errors.toString().contains("its flags could not be set") : "said so: " + host.errors;
             plugin.execute("refresh", Collections.<String, Object>emptyMap());
             Thread.sleep(300);
             assert !lamp.light && !lamp.flag : "still dark after the next read (the flag matches the laser)";
             assert Boolean.FALSE.equals(host.switches.get("picture")) : "and the switch says off";
+            plugin.stop();
+        }
+
+        // A dark for silence whose hold note did not take keeps its claim through the reads that
+        // follow (the stale "false" on the projector is not read over it), the note is written as
+        // soon as it can be, and the signal coming back still restores the picture.
+        {
+            final Lamp lamp = new Lamp();
+            lamp.live = 3;
+            lamp.held = "false";
+            FakeHost host = new FakeHost();
+            AuroraPlugin plugin = lampPlugin(lamp);
+            plugin.start(host, silenceSettings());
+            waitFor(host, "picture");
+            lamp.heldFails = true;
+            silentPastTheMinute(plugin);
+            waitUntil(new Check() { public boolean ok() { return !lamp.light; } }, "dark for silence");
+            assert "false".equals(lamp.held) : "the note did not take: " + lamp.held;
+            plugin.execute("refresh", Collections.<String, Object>emptyMap());
+            Thread.sleep(300);
+            plugin.watchSignal(true, "HDMI 3");
+            waitUntil(new Check() { public boolean ok() { return lamp.light; } }, "the signal still restores a dark whose note failed");
+            silentPastTheMinute(plugin);
+            waitUntil(new Check() { public boolean ok() { return !lamp.light; } }, "dark for silence again");
+            lamp.heldFails = false;
+            plugin.execute("refresh", Collections.<String, Object>emptyMap());
+            waitUntil(new Check() { public boolean ok() { return "silence".equals(lamp.held); } }, "the owed note is written with the next read: " + lamp.held);
             plugin.stop();
         }
 
@@ -1320,7 +1347,8 @@ public final class AuroraPluginTestAccess {
         assert Boolean.FALSE.equals(host.switches.get("cinema_24p")) && Boolean.TRUE.equals(host.switches.get("dynamic_tone_mapping")) && Boolean.FALSE.equals(host.switches.get("low_latency")) : "switches: " + host.switches;
         assert Double.valueOf(1237).equals(host.sensors.get("fan3_rpm")) : "fan 3: " + host.sensors.get("fan3_rpm");
         assert Boolean.TRUE.equals(host.binary.get("signal")) : "signal";
-        assert "1920\u00d71080p 60 Hz \u00b7 SDR".equals(host.texts.get("video_format")) : "format: " + host.texts.get("video_format");
+        // Published by the same read as the brightness, a moment later on the vendor thread.
+        waitUntil(new Check() { public boolean ok() { return "1920\u00d71080p 60 Hz \u00b7 SDR".equals(host.texts.get("video_format")); } }, "format read");
         assert Boolean.FALSE.equals(host.binary.get("eye_protect")) : "eye protection read";
 
         plugin.onEvent("select.brightness_mode", eco);

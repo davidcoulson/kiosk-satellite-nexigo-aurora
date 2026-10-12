@@ -125,6 +125,11 @@ public final class AuroraPlugin implements KioskPlugin {
      *  through: kept until it does (or the picture is changed), so a refused correction is retried
      *  rather than forgotten once the evidence for it has been read. */
     private boolean pendingOff;
+    /** Flags and hold note for a light change the HAL made but whose properties did not take
+     *  (the script to write them), retried before every read; while it is owed, the stale note on
+     *  the projector says nothing about who holds the picture, so it is not read back over this
+     *  plugin's own record (a dark for silence would otherwise forget it may come back). */
+    private String pendingFlags;
     /** stop() must return inside Kiosk Satellite's callback deadline (3 s). */
     private static final long STOP_WAIT_MS = 2000;
     private boolean laserPublished;
@@ -555,9 +560,13 @@ public final class AuroraPlugin implements KioskPlugin {
             // The light changed and a flag or the hold note did not take: once more for those,
             // and the change itself still counts (and still settles: the heat read next is from
             // before it).
-            Shell.Result f = runner.run(Projector.pictureFlagsScript(on, held), Shell.DEFAULT_TIMEOUT_MS);
-            if (!f.ok()) status(what + ": the light changed, but its flags could not be set via " + channelName + " (" + f.why() + ")", true);
-        }
+            String flags = Projector.pictureFlagsScript(on, held);
+            Shell.Result f = runner.run(flags, Shell.DEFAULT_TIMEOUT_MS);
+            if (!f.ok()) {
+                status(what + ": the light changed, but its flags could not be set via " + channelName + " (" + f.why() + "); trying again with each read", true);
+                pendingFlags = flags;
+            } else pendingFlags = null;
+        } else pendingFlags = null;
         pendingOff = false;
         commandedPictureOff = !on;
         darkForSilence = !on && forSilence;
@@ -917,12 +926,13 @@ public final class AuroraPlugin implements KioskPlugin {
 
     private void poll() {
         if (runner == null || !alive.get()) return;
+        if (pendingFlags != null && runner.run(pendingFlags, Shell.DEFAULT_TIMEOUT_MS).ok()) pendingFlags = null;
         Shell.Result r = runner.run(Projector.POLL_SCRIPT, Shell.DEFAULT_TIMEOUT_MS);
         if (!r.ok()) { status("Could not read the projector via " + channelName + ": " + r.why(), true); return; }
         Projector.State s = Projector.parse(r.stdout);
         // What this plugin asked for survives a Kiosk Satellite restart in the projector's own
         // properties; the in-memory flag alone forgot it, and the laser came back on.
-        if (s.heldOff != null) {
+        if (s.heldOff != null && pendingFlags == null) {
             commandedPictureOff = s.heldOff;
             // ...and why: a dark chosen for silence survives a restart as that, so the signal
             // coming back can still undo it.

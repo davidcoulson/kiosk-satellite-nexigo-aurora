@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Plugin 0.4.6: a light change whose flags or hold note did not take keeps them owed and retries
+  them before every read, and while they are owed the projector's stale note is not read over
+  the plugin's own record: a dark for silence whose "silence" note failed still comes back with
+  the signal.
+
 - Plugin 0.4.5: fixes from Codex's review of 0.4.4. The picture script undoes only a refused HAL
   call, back to the light flag's own previous value, and marks when the HAL changed the light, so
   a later failing flag still counts as a change (settled, flags retried). A restart correction
