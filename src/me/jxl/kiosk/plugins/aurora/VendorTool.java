@@ -66,12 +66,16 @@ public final class VendorTool {
     }
 
     private static void quick(Object dlp, Object dev, Object pm) {
+        // Positional: a fan that could not be read is an empty slot, so the ones after it keep
+        // their numbers (dropping it moved fan 2's speed onto fan 1).
         StringBuilder fans = new StringBuilder();
+        boolean any = false;
         for (int i = 0; i < 4; i++) {
             Object f = call(pm, null, "getFanSpeed", i);
-            if (f instanceof Integer) fans.append(fans.length() > 0 ? "," : "").append(f);
+            if (i > 0) fans.append(',');
+            if (f instanceof Integer) { fans.append(f); any = true; }
         }
-        if (fans.length() > 0) System.out.println("fans=" + fans);
+        if (any) System.out.println("fans=" + fans);
         print("brightness", call(dlp, null, "getDlpBrightnessMode", (Object) null));
         print("db", call(dlp, null, "getDBMode"));
         print("p24", call(dlp, null, "get24PMode"));

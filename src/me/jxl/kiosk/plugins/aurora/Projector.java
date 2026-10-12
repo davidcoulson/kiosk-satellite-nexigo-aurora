@@ -53,15 +53,26 @@ final class Projector {
      * cleared whenever Android wakes its display (a Kiosk Satellite restart or update does it),
      * and without it the firmware re-lights the laser; the note says to put it back. A cur.*
      * property outlives the app and the plugin and is gone after a boot, like the flags.
+     * "true" is a dark someone asked for; "silence" one this plugin chose for a silent input,
+     * which it may undo when the signal returns (a restart keeps that difference).
      */
     static final String HELD_PROP = "cur.djc.picture_off";
+    static final String HELD_SILENCE = "silence";
 
-    static String pictureScript(boolean on) {
+    /** A picture someone asked for: off is held as theirs. */
+    static String pictureScript(boolean on) { return pictureScript(on, "true"); }
+
+    /** The light, the vendor's flags and the hold note, all or nothing: each step runs only if
+     *  the one before worked, the note last, and a failure puts the light flag back and fails the
+     *  script, so a HAL that refused is never recorded as a dark (or lit) picture. held is what the
+     *  note says for an off ("true" or HELD_SILENCE); an on clears it. */
+    static String pictureScript(boolean on, String held) {
         String flag = on ? "true" : "false";
         return "setprop cur.appo.light.enabled " + flag
             + " && " + TOOL + " setLightSourceOnOff " + flag
             + " && setprop cur.prj.screenOff " + (on ? "false" : "true")
-            + "; setprop " + HELD_PROP + " " + (on ? "false" : "true");
+            + " && setprop " + HELD_PROP + " " + (on ? "false" : held)
+            + " || { setprop cur.appo.light.enabled " + (on ? "false" : "true") + "; false; }";
     }
 
     static String ledsScript(int status) {
@@ -261,6 +272,8 @@ final class Projector {
         Integer sleepMode;
         /** This plugin turned the picture off and nothing has lit it since (see HELD_PROP). */
         Boolean heldOff;
+        /** ...and it did so itself, for a silent input, rather than because someone asked. */
+        boolean heldForSilence;
         /** The vendor's eye-protection flag: its body sensor saw someone in front of the lens and
          *  has (or had) the light off. */
         Boolean eyeProtect;
@@ -320,7 +333,10 @@ final class Projector {
                 case "cec": s.ignoreCecStandby = bool(value); break;
                 case "nosignal": s.noSignalOff = integer(value); break;
                 case "sleep": s.sleepMode = integer(value); break;
-                case "held": s.heldOff = bool(value); break;
+                case "held":
+                    s.heldForSilence = HELD_SILENCE.equals(value.trim());
+                    s.heldOff = s.heldForSilence ? Boolean.TRUE : bool(value);
+                    break;
                 case "eye": s.eyeProtect = bool(value); break;
                 case "cpu": {
                     long[] c = cpuTimes(value);
@@ -376,6 +392,7 @@ final class Projector {
     }
 
     private static Integer integer(String v) {
+        if (v == null) return null;
         try { return Integer.valueOf(v.trim()); } catch (NumberFormatException e) { return null; }
     }
 
@@ -626,18 +643,35 @@ final class Projector {
      *  kept; the hash in the name ties it to one plugin build. */
     static String vendorDexPath(String hash) { return "/data/local/tmp/aurora-vendor-" + hash + ".dex"; }
 
-    /** Whether the helper for this build is already in place. */
-    static String vendorPresentScript(String path) { return "[ -s " + path + " ] && echo present; true"; }
-
-    /** One piece of the helper, as base64, appended to a staging file (the first piece starts it). */
-    static String vendorChunkScript(String path, String chunk, boolean first) {
-        return "printf '%s' '" + chunk + "' " + (first ? ">" : ">>") + " " + path + ".b64";
+    /** The helper's SHA-1 as the projector computes it, so a file is trusted for its content, not
+     *  for its name. Prints "sha1=<hex>" (empty when there is no file). */
+    static String vendorHashScript(String path) {
+        return "echo \"sha1=$(sha1sum " + path + " 2>/dev/null | cut -d' ' -f1)\"";
     }
 
-    /** Decodes the staged helper into place and removes other builds' copies. */
-    static String vendorFinishScript(String path) {
-        return "base64 -d " + path + ".b64 > " + path + " && chmod 644 " + path + "; rm -f " + path + ".b64;"
-            + " for f in /data/local/tmp/aurora-vendor-*.dex; do [ \"$f\" = " + path + " ] || rm -f \"$f\"; done; [ -s " + path + " ] && echo present; true";
+    /** The sha1= line of vendorHashScript's output, or null. */
+    static String vendorHash(String output) {
+        for (String line : output == null ? new String[0] : output.split("\n")) {
+            if (line.startsWith("sha1=") && line.length() > 5) return line.substring(5).trim();
+        }
+        return null;
+    }
+
+    /** One piece of the helper, as base64, appended to this install's own staging file (the first
+     *  piece starts it), so two installs never write into each other's. */
+    static String vendorChunkScript(String path, String token, String chunk, boolean first) {
+        return "printf '%s' '" + chunk + "' " + (first ? ">" : ">>") + " " + path + "." + token + ".b64";
+    }
+
+    /** Decodes the staged helper beside the final name and moves it into place in one step, only
+     *  if its hash is the one expected; other builds' copies go once they are an hour old (one a
+     *  stopping plugin may still be running is younger than that). */
+    static String vendorFinishScript(String path, String token, String sha1) {
+        String tmp = path + "." + token;
+        return "base64 -d " + tmp + ".b64 > " + tmp + " && [ \"$(sha1sum " + tmp + " | cut -d' ' -f1)\" = " + sha1 + " ]"
+            + " && chmod 644 " + tmp + " && mv -f " + tmp + " " + path + " && echo present; rc=$?; rm -f " + tmp + ".b64 " + tmp + ";"
+            + " find /data/local/tmp -maxdepth 1 -name 'aurora-vendor-*' -mmin +60 ! -name " + path.substring(path.lastIndexOf('/') + 1)
+            + " -exec rm -f {} + 2>/dev/null; [ $rc -eq 0 ]";
     }
 
     /** Runs the helper: quick, read, or set &lt;key&gt; &lt;value&gt;. */

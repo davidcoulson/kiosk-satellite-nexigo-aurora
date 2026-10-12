@@ -46,7 +46,9 @@ public final class ManifestContractTest {
 
         List<String> settings = objectsIn(json, "\"settings\"");
         List<String> commands = objectsIn(json, "\"commands\"");
-        assertTrue(settings.size() <= 20, "at most 20 settings (have " + settings.size() + ")");
+        // PluginManifest.kt: MAX_SETTINGS = 50 (it was 20 when this test was written).
+        assertTrue(settings.size() <= 50, "at most 50 settings (have " + settings.size() + ")");
+        assertTrue(number(json, "minAndroidSdk") >= 24, "minAndroidSdk must be at least 24");
         assertTrue(commands.size() <= 20, "at most 20 commands (have " + commands.size() + ")");
 
         Set<String> keys = new HashSet<>();
@@ -70,6 +72,18 @@ public final class ManifestContractTest {
                 String def = value(setting, "default");
                 assertTrue(options.contains(def), key + ": default \"" + def + "\" is not one of its options");
             }
+            if (setting.contains("\"type\": \"number\"")) {
+                // validateValue: a finite range, 1..10000 whole steps across it, and the default
+                // inside it and on a step - one that is off by a fraction is refused outright.
+                double min = number(setting, "min"), max = number(setting, "max");
+                double step = setting.contains("\"step\"") ? number(setting, "step") : 1.0;
+                double def = number(setting, "default");
+                double steps = (max - min) / step;
+                assertTrue(min < max && step > 0 && steps >= 1 && steps <= 10000 && Math.abs(steps - Math.rint(steps)) < 0.00001,
+                    key + ": min " + min + ", max " + max + " and step " + step + " do not make whole steps");
+                assertTrue(def >= min && def <= max, key + ": default " + def + " is outside " + min + ".." + max);
+                assertTrue(Math.abs((def - min) / step - Math.rint((def - min) / step)) < 0.00001, key + ": default " + def + " is not on a step of " + step + " from " + min);
+            }
             if (setting.contains("\"type\": \"string\"")) {
                 assertTrue(value(setting, "default").length() <= 512, key + ": default over 512 chars");
             }
@@ -82,9 +96,9 @@ public final class ManifestContractTest {
             text(command, "title", 80, null);
         }
 
-        System.out.println("PASS: manifest contract — " + settings.size() + "/20 settings, "
+        System.out.println("PASS: manifest contract — " + settings.size() + "/50 settings, "
             + commands.size() + "/20 commands, every title, description, group, option and default "
-            + "within PluginManifest.kt's limits.");
+            + "within PluginManifest.kt's limits, number settings on their steps.");
     }
 
     /** Checks one field's presence, non-blankness, length cap and (where
@@ -101,6 +115,13 @@ public final class ManifestContractTest {
             assertTrue(Pattern.compile(pattern).matcher(v).matches(), key + " does not match " + pattern + ": " + v);
         }
         return v;
+    }
+
+    /** A bare JSON number after "key": (min, max, step, default of a number setting). */
+    private static double number(String scope, String key) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"" + key + "\":\\s*(-?[0-9.eE+-]+)").matcher(scope);
+        assertTrue(m.find(), "missing number: " + key);
+        return Double.parseDouble(m.group(1));
     }
 
     private static String value(String scope, String key) {

@@ -5,6 +5,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -72,40 +74,89 @@ final class Shell {
         static Result failure(String why) { return new Result(-1, "", why, false); }
     }
 
-    /** {@code /system/bin/sh -c script} in this process. */
+    /** The first line a direct script prints: its shell's pid, for cleaning up after a timeout. */
+    static final String PID_MARK = "__aurora_pid=";
+
+    /** Direct scripts running now, by the pid their shell reported, so stop() can end them. */
+    private static final Map<Process, Drain> RUNNING = Collections.synchronizedMap(new HashMap<Process, Drain>());
+
+    /** {@code /system/bin/sh -c script} in this process. A script that runs past its time is
+     *  killed with everything it started: destroying the shell alone left a projector-test blocked
+     *  in the HAL behind it. */
     static final Runner DIRECT = new Runner() {
         @Override public Result run(String script, int timeoutMs) {
             Process p;
             try {
-                p = new ProcessBuilder("/system/bin/sh", "-c", script).start();
+                p = new ProcessBuilder("/system/bin/sh", "-c", "echo " + PID_MARK + "$$; " + script).start();
             } catch (IOException e) {
                 return Result.failure("could not start a shell: " + e.getMessage());
             }
-            try {
-                p.getOutputStream().close();
-            } catch (IOException ignored) { /* nothing to write */ }
             Drain out = new Drain(p.getInputStream());
             Drain err = new Drain(p.getErrorStream());
-            out.start();
-            err.start();
-            boolean finished;
+            RUNNING.put(p, out);
             try {
-                finished = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                p.destroyForcibly();
-                return Result.failure("interrupted");
+                try { p.getOutputStream().close(); } catch (IOException ignored) { /* nothing to write */ }
+                out.start();
+                err.start();
+                boolean finished;
+                try {
+                    finished = p.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    kill(p, out);
+                    return Result.failure("interrupted");
+                }
+                if (!finished) kill(p, out);
+                try {
+                    out.join(1000);
+                    err.join(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return new Result(finished ? p.exitValue() : -1, stripPid(out.text()), err.text(), !finished);
+            } finally {
+                RUNNING.remove(p);
+                try { p.getInputStream().close(); } catch (IOException ignored) { /* closing */ }
+                try { p.getErrorStream().close(); } catch (IOException ignored) { /* closing */ }
             }
-            if (!finished) p.destroyForcibly();
-            try {
-                out.join(1000);
-                err.join(1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            return new Result(finished ? p.exitValue() : -1, out.text(), err.text(), !finished);
         }
     };
+
+    /** The script's output without the pid line it starts with. */
+    static String stripPid(String text) {
+        if (!text.startsWith(PID_MARK)) return text;
+        int nl = text.indexOf('\n');
+        return nl < 0 ? "" : text.substring(nl + 1);
+    }
+
+    /** The shell's pid from its first line, or 0. */
+    static int pidOf(String text) {
+        if (!text.startsWith(PID_MARK)) return 0;
+        int nl = text.indexOf('\n');
+        try { return Integer.parseInt(text.substring(PID_MARK.length(), nl < 0 ? text.length() : nl).trim()); }
+        catch (NumberFormatException e) { return 0; }
+    }
+
+    /** The shell's children first (pkill -P), then the shell. */
+    private static void kill(Process p, Drain out) {
+        int pid = pidOf(out.text());
+        if (pid > 0) {
+            try {
+                Process k = new ProcessBuilder("/system/bin/sh", "-c", "pkill -9 -P " + pid + " 2>/dev/null; true").start();
+                k.waitFor(2000, TimeUnit.MILLISECONDS);
+                k.destroyForcibly();
+            } catch (IOException | InterruptedException ignored) { /* the shell goes below regardless */ }
+        }
+        p.destroyForcibly();
+    }
+
+    /** Ends every direct script and ADB exchange in progress (the plugin is stopping). */
+    static void cancelAll() {
+        Map.Entry<?, ?>[] all;
+        synchronized (RUNNING) { all = RUNNING.entrySet().toArray(new Map.Entry<?, ?>[0]); }
+        for (Map.Entry<?, ?> e : all) kill((Process) e.getKey(), (Drain) e.getValue());
+        Adb.cancelAll();
+    }
 
     /** The same script through Kiosk Satellite's Shizuku connection, as the shell user. */
     static Runner shizuku(final PluginHost host) {
@@ -166,7 +217,10 @@ final class Shell {
         }
     }
 
+    /** Reads a stream to its end, keeping the first 64 KiB and discarding the rest, so a chatty
+     *  child never blocks on a full pipe. */
     private static final class Drain extends Thread {
+        private static final int CAP = 65536;
         private final InputStream in;
         private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
 
@@ -179,12 +233,14 @@ final class Shell {
             byte[] chunk = new byte[4096];
             try {
                 int n;
-                while ((n = in.read(chunk)) >= 0 && buffer.size() < 65536) buffer.write(chunk, 0, n);
+                while ((n = in.read(chunk)) >= 0) {
+                    synchronized (buffer) { if (buffer.size() < CAP) buffer.write(chunk, 0, Math.min(n, CAP - buffer.size())); }
+                }
             } catch (IOException ignored) {
                 // the process ended or was destroyed; whatever was read is what we return
             }
         }
 
-        String text() { return new String(buffer.toByteArray(), StandardCharsets.UTF_8); }
+        String text() { synchronized (buffer) { return new String(buffer.toByteArray(), StandardCharsets.UTF_8); } }
     }
 }

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Plugin 0.4.4: fixes from a full review (Codex, 2026-10-12). Picture: the script is all or
+  nothing (a refused HAL fails it and puts the light flag back) and the plugin records a change
+  only once it worked; every picture change and signal reading runs on one thread, so a manual
+  Off and an automatic restore cannot interleave; the no-signal dark is re-checked against the
+  app in front and the live input before it happens, its clock restarts on a manual change or a
+  new input, a refused restore is retried, and the reason ("silence" vs asked for) is kept in the
+  projector's hold note across restarts. A CEC Standby checks the live input first. ADB has one
+  deadline for the whole exchange (a trickling peer used to keep it alive forever) and checks
+  packets; stop() cuts off open shells and ADB exchanges and waits for both threads; a direct
+  script that times out takes its children with it and never blocks on a full pipe. The vendor
+  helper is trusted for its hash, staged under a name of its own, fits Shizuku's argument and
+  timeout limits, and is re-checked after repeated failures. Also: a missing channel is retried
+  with backoff, Picture mode falls back through the shell user, a refused publish is retried,
+  partial helper output no longer throws, fans keep their numbers, a vanished temperature turns
+  unknown, minAndroidSdk 26.
+
 - Plugin 0.4.3: Dark after no signal (default 15 min). Stay on keeps the projector out of standby,
   which also stops its own no-signal shutdown, so a source that sleeps without HDMI-CEC (the
   Unraid VM) left the laser lighting a No signal screen all day. After the set time with no

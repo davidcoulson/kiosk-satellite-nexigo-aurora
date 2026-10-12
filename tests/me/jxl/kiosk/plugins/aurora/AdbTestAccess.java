@@ -16,4 +16,6 @@ public final class AdbTestAccess {
     public static Packet read(DataInputStream in) throws IOException { Adb.Packet p = Adb.read(in); Packet q = new Packet(); q.cmd = p.cmd; q.arg0 = p.arg0; q.arg1 = p.arg1; q.data = p.data; return q; }
     public static void send(DataOutputStream out, int cmd, int arg0, int arg1, byte[] data) throws IOException { Adb.send(out, cmd, arg0, arg1, data); }
     public static Result run(int port, String script, int timeoutMs) { return new Result(Adb.run("127.0.0.1", port, script, timeoutMs)); }
+    public static final int A_AUTH = Adb.A_AUTH;
+    public static void cancelAll() { Adb.cancelAll(); }
 }

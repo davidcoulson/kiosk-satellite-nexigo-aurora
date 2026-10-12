@@ -19,7 +19,7 @@ public final class AuroraPluginTestAccess {
         + "fan=Thermal speed:40\nboot=5\ncec=true\nsleep=0\nnosignal=0\nwdt=40\n";
 
     /** Records every script and answers the poll with a canned projector. */
-    static final class FakeShell implements Shell.Runner {
+    static class FakeShell implements Shell.Runner {
         final List<String> scripts = Collections.synchronizedList(new ArrayList<String>());
         volatile String pollAnswer = POLL_ANSWER;
         volatile boolean probeOk = true;
@@ -45,7 +45,9 @@ public final class AuroraPluginTestAccess {
         @Override public void showWindow(String title, String message, String buttonLabel) {}
         @Override public void hideWindow() {}
         @Override public void log(String message) {}
-        @Override public void status(String message, boolean error) { status = message; statusError = error; }
+        /** Every error status, since a later read replaces the line itself. */
+        final List<String> errors = Collections.synchronizedList(new ArrayList<String>());
+        @Override public void status(String message, boolean error) { status = message; statusError = error; if (error) errors.add(message); }
         @Override public void publishSwitch(String key, String name, boolean state) { switches.put(key, state); }
         @Override public void publishSelect(String key, String name, String[] options, String state) { selects.put(key, state); }
         @Override public void publishSensor(String key, String name, Map<String, Object> metadata, Double state) { sensors.put(key, state); }
@@ -74,6 +76,8 @@ public final class AuroraPluginTestAccess {
         cpu();
         steady();
         noSignal();
+        refusedPicture();
+        review();
         guard();
         framework();
         arcAudio();
@@ -175,8 +179,13 @@ public final class AuroraPluginTestAccess {
         Projector.State odd = Projector.parse("source=99\nmode=6\n");
         assert odd.sourceId == 99 && odd.input() == null && odd.pictureMode == 6 && odd.pictureModeLabel() == null : "unmapped ids stay unknown";
         assert Projector.pictureScript(false).equals(
-            "setprop cur.appo.light.enabled false && /vendor/bin/hw/projector-test setLightSourceOnOff false && setprop cur.prj.screenOff true; setprop cur.djc.picture_off true") : "off recipe order";
-        assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false; setprop cur.djc.picture_off false") : "on recipe";
+            "setprop cur.appo.light.enabled false && /vendor/bin/hw/projector-test setLightSourceOnOff false && setprop cur.prj.screenOff true"
+            + " && setprop cur.djc.picture_off true || { setprop cur.appo.light.enabled true; false; }") : "off recipe: all or nothing, the note last, the flag put back on failure";
+        assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false && setprop cur.djc.picture_off false || { setprop cur.appo.light.enabled false; false; }") : "on recipe";
+        assert Projector.pictureScript(false, Projector.HELD_SILENCE).contains("setprop cur.djc.picture_off silence") : "a dark for silence is held as that";
+        Projector.State quiet = Projector.parse("held=silence\n");
+        assert Boolean.TRUE.equals(quiet.heldOff) && quiet.heldForSilence : "held=silence: held, for silence";
+        assert !Projector.parse("held=true\n").heldForSilence : "held=true: someone asked";
         assert Boolean.TRUE.equals(Projector.parse("held=true\n").heldOff) && Projector.parse("held=\n").heldOff == null : "held note";
         assert Boolean.TRUE.equals(Projector.parse("ls=1790500677085 On\n").lightSource) && Boolean.FALSE.equals(Projector.parse("ls=1790500677085 Off\n").lightSource)
             && Projector.parse("ls=\n").lightSource == null : "light-source command";
@@ -223,9 +232,10 @@ public final class AuroraPluginTestAccess {
 
         plugin.onEvent("switch.picture", Collections.<String, Object>singletonMap("on", false));
         waitScripts(shell, before + 3);
-        assert shell.scripts.get(before).equals(Projector.ledsScript(Projector.LED_STANDBY)) : "the bar follows the picture off: " + shell.scripts.get(before);
-        assert shell.scripts.get(before + 1).equals(Projector.pictureScript(false)) : "switch off script";
-        assert shell.scripts.get(before + 2).equals(Projector.POLL_SCRIPT) : "a read follows every command";
+        // The picture first; the bar follows only once that worked, then the read.
+        assert shell.scripts.get(before).equals(Projector.pictureScript(false)) : "switch off script: " + shell.scripts.get(before);
+        assert shell.scripts.get(before + 1).equals(Projector.POLL_SCRIPT) : "a read follows every command";
+        assert shell.scripts.get(before + 2).equals(Projector.ledsScript(Projector.LED_STANDBY)) : "the bar follows the picture off: " + shell.scripts.subList(before, shell.scripts.size());
         Thread.sleep(100);
         assert "Standby".equals(host.selects.get("front_leds")) : "leds select shows what was commanded";
 
@@ -392,7 +402,7 @@ public final class AuroraPluginTestAccess {
     static final String APP_FRONT = "    mResumedActivity: ActivityRecord{51cb830 u0 com.spocky.projengmenu/.ui.home.MainActivity t631}\n";
 
     /** The projector's adbd answering the CEC history and the app in front. */
-    static final class CecAdb extends FakeAdb {
+    static class CecAdb extends FakeAdb {
         volatile String history = CEC_OLD;
         volatile String foreground = TV_FRONT;
         volatile String previousBoot = "boot=1234\n"
@@ -534,69 +544,332 @@ public final class AuroraPluginTestAccess {
 
     /** A light-source command older than the plugin's own last picture command is ignored: the
      *  newer one was pruned from the log. */
-    /** A lit picture on a silent HDMI input goes dark after the set time and comes back with the
-     *  signal; a picture someone switched by hand is left alone. */
-    static void noSignal() throws Exception {
-        FakeShell shell = new FakeShell();
-        shell.pollAnswer = POLL_ANSWER;
-        FakeHost host = new FakeHost();
-        AuroraPlugin plugin = new AuroraPlugin(shell, null);
-        plugin.silenceMinuteMs = 300;
-        Map<String, Object> st = settings("Direct", 30);
+    /** A projector that keeps its light and hold note: picture scripts change them (unless the
+     *  HAL is made to refuse), polls report them. Answers as adbd, so it is every channel. */
+    static final class Lamp extends CecAdb {
+        volatile boolean light = true;
+        volatile String held = "";
+        volatile boolean halFails;
+        private final java.util.regex.Pattern heldIn = java.util.regex.Pattern.compile("picture_off (\\S+) \\|\\|");
+        @Override public Shell.Result run(String script, int timeoutMs) {
+            if (script.equals(Projector.POLL_SCRIPT)) {
+                scripts.add(script);
+                return new Shell.Result(0, POLL_ANSWER.replace("light=true", "light=" + light + "\nheld=" + held).replace("screenoff=false", "screenoff=" + !light), "", false);
+            }
+            if (script.startsWith("setprop cur.appo.light.enabled ") && script.contains("setLightSourceOnOff")) {
+                scripts.add(script);
+                if (halFails) return new Shell.Result(1, "", "HAL refused", false);
+                light = script.contains("setLightSourceOnOff true");
+                java.util.regex.Matcher m = heldIn.matcher(script);
+                if (m.find()) held = m.group(1);
+                return new Shell.Result(0, "", "", false);
+            }
+            return super.run(script, timeoutMs);
+        }
+    }
+
+    static AuroraPlugin lampPlugin(final Lamp lamp) {
+        AuroraPlugin plugin = new AuroraPlugin(new FakeShell(), null, new AuroraPlugin.AdbFactory() { @Override public Shell.Runner create(int port) { return lamp; } });
+        plugin.silenceMinuteMs = 100;
+        return plugin;
+    }
+
+    static Map<String, Object> silenceSettings() {
+        Map<String, Object> st = settings("ADB", 30);
         st.put("darkWithoutSignal", 1);
+        st.put("followSource", false);
+        return st;
+    }
+
+    /** Silence past the (100 ms) minute: the first reading starts the clock, the next acts. */
+    static void silentPastTheMinute(AuroraPlugin plugin) throws InterruptedException {
+        plugin.watchSignal(false);
+        Thread.sleep(150);
+        plugin.watchSignal(false);
+    }
+
+    /** A lit picture on a silent HDMI input goes dark after the set time and comes back with the
+     *  signal; anything someone did to the picture since wins, and so does a changed context. */
+    static void noSignal() throws Exception {
+        final Lamp lamp = new Lamp();
+        lamp.live = 3;
+        final FakeHost host = new FakeHost();
+        final AuroraPlugin plugin = lampPlugin(lamp);
+        plugin.start(host, silenceSettings());
+        waitFor(host, "picture");
+        waitUntil(new Check() { public boolean ok() { return "HDMI 3".equals(host.texts.get("showing")); } }, "showing HDMI 3: " + host.texts);
+
+        plugin.watchSignal(false);
+        Thread.sleep(50);
+        plugin.watchSignal(false);
+        Thread.sleep(150);
+        assert lamp.light : "half the time is not enough";
+        plugin.watchSignal(false);
+        waitUntil(new Check() { public boolean ok() { return !lamp.light && "silence".equals(lamp.held); } }, "dark, held for silence: light " + lamp.light + " held " + lamp.held);
+
+        plugin.watchSignal(true);
+        waitUntil(new Check() { public boolean ok() { return lamp.light && "false".equals(lamp.held); } }, "back with the signal");
+
+        // A restore the HAL refuses keeps its claim and is tried again on the next reading.
+        silentPastTheMinute(plugin);
+        waitUntil(new Check() { public boolean ok() { return !lamp.light; } }, "dark again");
+        lamp.halFails = true;
+        plugin.watchSignal(true);
+        Thread.sleep(300);
+        assert !lamp.light && "silence".equals(lamp.held) : "a refused restore changes nothing";
+        assert host.errors.toString().contains("HAL refused") : "and says so: " + host.errors;
+        lamp.halFails = false;
+        plugin.watchSignal(true);
+        waitUntil(new Check() { public boolean ok() { return lamp.light; } }, "the next reading restores it");
+
+        // A manual Off as the signal returns: the hand wins, whichever came first.
+        silentPastTheMinute(plugin);
+        waitUntil(new Check() { public boolean ok() { return !lamp.light; } }, "dark for silence");
+        plugin.onEvent("switch.picture", Collections.<String, Object>singletonMap("on", false));
+        plugin.watchSignal(true);
+        Thread.sleep(400);
+        assert !lamp.light && "true".equals(lamp.held) : "switched off by hand: stays off, held as theirs (" + lamp.held + ")";
+        plugin.onEvent("switch.picture", Collections.<String, Object>singletonMap("on", true));
+        waitUntil(new Check() { public boolean ok() { return lamp.light; } }, "on by hand");
+
+        // A manual On restarts the clock: silence before it does not count after it.
+        plugin.watchSignal(false);
+        Thread.sleep(80);
+        plugin.onEvent("switch.picture", Collections.<String, Object>singletonMap("on", true));
+        Thread.sleep(100);
+        plugin.watchSignal(false);
+        Thread.sleep(40);
+        plugin.watchSignal(false);
+        Thread.sleep(200);
+        assert lamp.light : "silence from before the manual On does not count";
+
+        // An app in front when the time comes: nothing.
+        plugin.watchSignal(true);
+        plugin.watchSignal(false);
+        Thread.sleep(150);
+        lamp.foreground = APP_FRONT;
+        plugin.watchSignal(false);
+        Thread.sleep(300);
+        assert lamp.light : "an app in front is not darkened";
+        lamp.foreground = TV_FRONT;
+
+        // The input changed under the clock: it starts over.
+        plugin.watchSignal(true);
+        plugin.watchSignal(false);
+        Thread.sleep(150);
+        lamp.live = 1;
+        plugin.watchSignal(false);
+        Thread.sleep(300);
+        assert lamp.light : "silence on HDMI 3 does not darken HDMI 1";
+        lamp.live = 3;
+        plugin.stop();
+
+        // A restart keeps the reason: a dark chosen for silence still comes back with the signal...
+        lamp.light = false;
+        lamp.held = "silence";
+        FakeHost host2 = new FakeHost();
+        AuroraPlugin again = lampPlugin(lamp);
+        again.start(host2, silenceSettings());
+        waitFor(host2, "picture");
+        again.watchSignal(true);
+        waitUntil(new Check() { public boolean ok() { return lamp.light; } }, "restored after a restart");
+        again.stop();
+        // ...and one someone asked for does not.
+        lamp.light = false;
+        lamp.held = "true";
+        FakeHost host3 = new FakeHost();
+        AuroraPlugin third = lampPlugin(lamp);
+        third.start(host3, silenceSettings());
+        waitFor(host3, "picture");
+        third.watchSignal(true);
+        Thread.sleep(400);
+        assert !lamp.light : "a dark someone asked for survives a restart and the signal";
+        third.stop();
+    }
+
+    /** A picture command the HAL refuses is not recorded as done: no hold, no LEDs, a status. */
+    static void refusedPicture() throws Exception {
+        final Lamp lamp = new Lamp();
+        lamp.live = 3;
+        FakeHost host = new FakeHost();
+        AuroraPlugin plugin = lampPlugin(lamp);
+        Map<String, Object> st = silenceSettings();
+        st.put("ledsFollowPicture", true);
         plugin.start(host, st);
         waitFor(host, "picture");
-        final String off = Projector.pictureScript(false), on = Projector.pictureScript(true);
-        plugin.watchSignal(true);
-        plugin.watchSignal(false);                 // silent from here
-        Thread.sleep(150);
-        plugin.watchSignal(false);                 // half the time
-        assert !shell.scripts.contains(off) : "half the time is not enough";
-        plugin.watchSignal(null);                  // an app in front: no telling, the clock stops
-        plugin.watchSignal(false);                 // silent again from here
         Thread.sleep(200);
-        plugin.watchSignal(false);                 // 350 ms since the first silence, 200 since this one
-        Thread.sleep(100);
-        assert !shell.scripts.contains(off) : "an app in front restarts the clock";
-        Thread.sleep(100);
-        plugin.watchSignal(false);                 // 400 ms of this silence
-        final FakeShell sh = shell;
-        waitUntil(new Check() { public boolean ok() { return sh.scripts.contains(off); } }, "silent past the minute: dark " + shell.scripts);
-        shell.pollAnswer = POLL_ANSWER.replace("light=true", "light=false");
-        plugin.execute("refresh", Collections.<String, Object>emptyMap());
-        waitUntil(new Check() { public boolean ok() { return Boolean.FALSE.equals(host.switches.get("picture")); } }, "dark read back");
-        plugin.watchSignal(true);
-        waitUntil(new Check() { public boolean ok() { return sh.scripts.contains(on); } }, "the signal brings it back");
-
-        // Switched off by hand: a returning signal leaves it dark.
-        int before = shell.scripts.size();
-        Map<String, Object> dark = new HashMap<>(); dark.put("on", false);
-        plugin.onEvent("switch.picture", dark);
-        waitUntil(new Check() { public boolean ok() { return sh.scripts.lastIndexOf(off) >= 0 && sh.scripts.lastIndexOf(off) > sh.scripts.lastIndexOf(on); } }, "switched off");
-        plugin.watchSignal(false);
-        plugin.watchSignal(true);
-        Thread.sleep(200);
-        assert shell.scripts.lastIndexOf(on) < before : "a picture switched off by hand stays off: " + shell.scripts.subList(before, shell.scripts.size());
+        int leds = 0;
+        for (String x : lamp.scripts) if (x.startsWith(Projector.ledsScript(Projector.LED_STANDBY))) leds++;
+        lamp.halFails = true;
+        plugin.onEvent("switch.picture", Collections.<String, Object>singletonMap("on", false));
+        Thread.sleep(400);
+        assert lamp.light && "".equals(lamp.held) : "nothing changed on the projector";
+        assert Boolean.TRUE.equals(host.switches.get("picture")) : "the switch still says on";
+        int after = 0;
+        for (String x : lamp.scripts) if (x.startsWith(Projector.ledsScript(Projector.LED_STANDBY))) after++;
+        assert after == leds : "the bar did not go to standby for a picture that stayed on";
+        assert host.errors.toString().contains("HAL refused") : "the refusal is reported: " + host.errors;
         plugin.stop();
+    }
+
+    /** The 2026-10-12 review's findings, one check each. */
+    static void review() throws Exception {
+        // Partial helper output (an API call that failed is left out) parses without throwing.
+        assert "Signal".equals(Projector.videoFormat(Projector.parseVendor("signal=true\n"))) : "signal alone";
+        assert Projector.videoFormat(Projector.parseVendor("signal=true\nres=1920x1080,60,p\n")).startsWith("1920\u00d71080p 60 Hz") : "no HDR or depth";
+
+        // The direct shell reports its pid first (for killing what it started on a timeout), and
+        // that line never reaches the caller.
+        assert Shell.pidOf(Shell.PID_MARK + "4242\nlight=true\n") == 4242 && Shell.pidOf("light=true\n") == 0 : "pid line";
+        assert Shell.stripPid(Shell.PID_MARK + "4242\nlight=true\n").equals("light=true\n") && Shell.stripPid("x\n").equals("x\n") : "pid line stripped";
+
+        // Every helper piece fits one Shizuku argument, and every helper run its timeout cap.
+        StringBuilder big = new StringBuilder();
+        for (int i = 0; i < AuroraPlugin.VENDOR_CHUNK; i++) big.append('A');
+        String piece = Projector.vendorChunkScript(Projector.vendorDexPath("0123456789ab"), "0123456789abcdef", big.toString(), false);
+        assert piece.length() <= 4096 : "a helper piece is " + piece.length() + " characters, over Shizuku's 4096";
+        assert AuroraPlugin.VENDOR_TIMEOUT_MS <= 30000 : "helper runs within Shizuku's 30 s";
+        String finish = Projector.vendorFinishScript(Projector.vendorDexPath("0123456789ab"), "tok", "deadbeef");
+        assert finish.contains("= deadbeef ]") && finish.contains("mv -f") && finish.contains("-mmin +60") : "checked, moved in one step, only stale builds removed: " + finish;
+        assert "abc123".equals(Projector.vendorHash("sha1=abc123\n")) && Projector.vendorHash("sha1=\n") == null : "hash line";
+
+        // A fan that could not be read keeps its slot: fans 3 and 4 stay fans 3 and 4.
+        {
+            FakeShell shell = new FakeShell();
+            FakeHost host = new FakeHost();
+            AuroraPlugin plugin = new AuroraPlugin(shell, null);
+            plugin.start(host, settings("Direct", 30));
+            waitFor(host, "picture");
+            Map<String, String> v = new HashMap<>();
+            v.put("fans", "1040,1180,1237,1040");
+            plugin.publishVendor(v);
+            v.put("fans", ",1180,1300,1040");
+            plugin.publishVendor(v);
+            assert host.sensors.get("fan1_rpm") == null && host.sensors.containsKey("fan1_rpm") : "fan 1 unknown: " + host.sensors;
+            assert Double.valueOf(1300).equals(host.sensors.get("fan3_rpm")) : "fan 3 is still fan 3: " + host.sensors;
+            plugin.stop();
+        }
+
+        // A temperature that stops reporting turns unknown instead of keeping its value for good.
+        {
+            FakeShell shell = new FakeShell();
+            FakeHost host = new FakeHost();
+            AuroraPlugin plugin = new AuroraPlugin(shell, null);
+            plugin.start(host, settings("Direct", 30));
+            waitFor(host, "picture");
+            assert Double.valueOf(37).equals(host.sensors.get("temp_dmd")) : "dmd read";
+            shell.pollAnswer = POLL_ANSWER.replace(",NtcDmd1:37", "");
+            refreshAnswer(plugin, shell, shell.pollAnswer);
+            assert host.sensors.containsKey("temp_dmd") && host.sensors.get("temp_dmd") == null : "dmd gone: unknown, " + host.sensors.get("temp_dmd");
+            plugin.stop();
+        }
+
+        // Picture mode without the framework goes through the shell user, not the kiosk process.
+        {
+            FakeShell direct = new FakeShell();
+            final FakeAdb adb = new FakeAdb();
+            FakeHost host = new FakeHost();
+            AuroraPlugin plugin = new AuroraPlugin(direct, null, new AuroraPlugin.AdbFactory() { @Override public Shell.Runner create(int port) { return adb; } });
+            plugin.start(host, settings("Auto", 30));
+            waitFor(host, "picture");
+            plugin.onEvent("select.picture_mode", Collections.<String, Object>singletonMap("option", "Standard"));
+            waitUntil(new Check() { public boolean ok() { return adb.scripts.toString().contains("settings put global picture_mode"); } }, "mode via the shell user: " + adb.scripts);
+            assert !direct.scripts.toString().contains("settings put global picture_mode") : "not from the kiosk process";
+            plugin.stop();
+        }
+
+        // A source's Standby checks the input on the wall now, not as of the last poll.
+        {
+            final Lamp lamp = new Lamp();
+            lamp.live = 2;
+            final FakeHost host = new FakeHost();
+            AuroraPlugin plugin = lampPlugin(lamp);
+            Map<String, Object> st = silenceSettings();
+            st.put("followSource", true);
+            plugin.start(host, st);
+            waitFor(host, "picture");
+            Thread.sleep(2500);                       // the CEC baseline read
+            lamp.live = 3;                            // switched to the VM since the last poll
+            lamp.history = lamp.history + CEC_SLEEP;  // the Apple TV (HDMI 2) sleeps
+            waitUntil(new Check() { public boolean ok() { return lamp.appended.toString().contains("picture left on"); } }, "noted: " + lamp.appended);
+            assert lamp.light : "the VM on HDMI 3 stays lit";
+            plugin.stop();
+        }
+
+        // A channel that was not there at start is found later without a settings change.
+        {
+            FakeShell shell = new FakeShell();
+            shell.probeOk = false;
+            FakeHost host = new FakeHost();
+            AuroraPlugin plugin = new AuroraPlugin(shell, null);
+            plugin.redetectFirstSeconds = 1;
+            plugin.start(host, settings("Direct", 30));
+            Thread.sleep(500);
+            assert !host.switches.containsKey("picture") : "no channel yet";
+            shell.probeOk = true;
+            waitFor(host, "picture");
+            plugin.stop();
+        }
+
+        // stop() waits for work in flight, and nothing from the session runs after it returns.
+        {
+            final java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+            final java.util.concurrent.atomic.AtomicBoolean blocking = new java.util.concurrent.atomic.AtomicBoolean();
+            final FakeShell shell = new FakeShell() {
+                @Override public Shell.Result run(String script, int timeoutMs) {
+                    if (blocking.get() && script.equals(Projector.POLL_SCRIPT)) {
+                        scripts.add(script);
+                        try { release.await(); } catch (InterruptedException e) { return Shell.Result.failure("interrupted"); }
+                        return new Shell.Result(0, POLL_ANSWER.replace("sleep=0", "sleep=4"), "", false);
+                    }
+                    return super.run(script, timeoutMs);
+                }
+            };
+            FakeHost host = new FakeHost();
+            AuroraPlugin plugin = new AuroraPlugin(shell, null);
+            plugin.start(host, settings("Direct", 30));
+            waitFor(host, "picture");
+            blocking.set(true);
+            plugin.execute("refresh", Collections.<String, Object>emptyMap());
+            Thread.sleep(200);                        // the poll is now blocked in the shell
+            plugin.stop();
+            int after = shell.scripts.size();
+            release.countDown();
+            Thread.sleep(300);
+            assert shell.scripts.size() == after : "nothing ran after stop returned: " + shell.scripts.subList(after, shell.scripts.size());
+        }
     }
 
     /** Wobble inside the step stays home; a real move, unknown, or old age goes out. */
     static void steady() {
-        Steady st = new Steady();
-        long t = 1_000_000;
-        assert st.due("fan1_rpm", 1096.0, 50, 1800_000, t) : "the first reading always goes";
-        assert !st.due("fan1_rpm", 1112.0, 50, 1800_000, t + 60_000) : "16 rpm of jitter stays out";
-        assert !st.due("fan1_rpm", 1081.0, 50, 1800_000, t + 120_000) : "jitter is measured from the value sent, not the last read";
-        assert st.due("fan1_rpm", 1150.0, 50, 1800_000, t + 180_000) : "a 54 rpm move goes";
-        assert !st.due("fan1_rpm", 1160.0, 50, 1800_000, t + 240_000) : "and becomes the new reference";
-        assert st.due("fan1_rpm", 1160.0, 50, 1800_000, t + 180_000 + 1800_000) : "half an hour on, the current value goes anyway";
-        assert st.due("fan1_rpm", null, 50, 1800_000, t + 3_700_000) : "turning unknown goes";
-        assert !st.due("fan1_rpm", null, 50, 1800_000, t + 9_000_000) : "staying unknown does not";
-        assert st.due("fan1_rpm", 1100.0, 50, 1800_000, t + 9_060_000) : "coming back goes";
-        assert st.due("laser_hours", 571.7, 0.05, 3600_000, t) && !st.due("laser_hours", 571.7, 0.05, 3600_000, t + 60_000)
-            && st.due("laser_hours", 571.8, 0.05, 3600_000, t + 360_000) : "laser hours go on every tenth";
+        final Steady st = new Steady();
+        final long t = 1_000_000;
+        // due() and, when it says so, sent(): what a publish that went through does.
+        class Send { boolean go(String k, Double v, double step, long age, long now) { if (!st.due(k, v, step, age, now)) return false; st.sent(k, v, now); return true; } }
+        Send s = new Send();
+        assert s.go("fan1_rpm", 1096.0, 50, 1800_000, t) : "the first reading always goes";
+        assert !s.go("fan1_rpm", 1112.0, 50, 1800_000, t + 60_000) : "16 rpm of jitter stays out";
+        assert !s.go("fan1_rpm", 1081.0, 50, 1800_000, t + 120_000) : "jitter is measured from the value sent, not the last read";
+        assert s.go("fan1_rpm", 1150.0, 50, 1800_000, t + 180_000) : "a 54 rpm move goes";
+        assert !s.go("fan1_rpm", 1160.0, 50, 1800_000, t + 240_000) : "and becomes the new reference";
+        assert s.go("fan1_rpm", 1160.0, 50, 1800_000, t + 180_000 + 1800_000) : "half an hour on, the current value goes anyway";
+        assert s.go("fan1_rpm", null, 50, 1800_000, t + 3_700_000) : "turning unknown goes";
+        assert !s.go("fan1_rpm", null, 50, 1800_000, t + 9_000_000) : "staying unknown does not";
+        assert s.go("fan1_rpm", 1100.0, 50, 1800_000, t + 9_060_000) : "coming back goes";
+        assert s.go("laser_hours", 571.7, 0.05, 3600_000, t) && !s.go("laser_hours", 571.7, 0.05, 3600_000, t + 60_000)
+            && s.go("laser_hours", 571.8, 0.05, 3600_000, t + 360_000) : "laser hours go on every tenth";
+        // A publish the host refused (its per-second budget) is not recorded: the next try goes.
+        try {
+            st.publish("cpu_busy", 40.0, 5, 300_000, t, new Runnable() { public void run() { throw new IllegalStateException("At most 64 entity changes per second"); } });
+            assert false : "the refusal is passed on";
+        } catch (IllegalStateException expected) { /* passed on */ }
+        assert st.due("cpu_busy", 40.0, 5, 300_000, t + 1000) : "a refused value is still due";
+        try {
+            st.publish("cpu_busy", null, 5, 300_000, t + 2000, new Runnable() { public void run() { throw new IllegalStateException("budget"); } });
+        } catch (IllegalStateException expected) { /* refused */ }
+        assert st.due("cpu_busy", null, 5, 300_000, t + 3000) : "a refused turn to unknown is still due, not lost for good";
         st.clear();
-        assert st.due("fan1_rpm", 1100.0, 50, 1800_000, t + 9_120_000) : "a fresh start sends everything again";
+        assert s.go("fan1_rpm", 1100.0, 50, 1800_000, t + 9_120_000) : "a fresh start sends everything again";
     }
 
     static void staleLightSource() throws Exception {
