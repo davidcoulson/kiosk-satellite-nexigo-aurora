@@ -179,9 +179,11 @@ public final class AuroraPluginTestAccess {
         Projector.State odd = Projector.parse("source=99\nmode=6\n");
         assert odd.sourceId == 99 && odd.input() == null && odd.pictureMode == 6 && odd.pictureModeLabel() == null : "unmapped ids stay unknown";
         assert Projector.pictureScript(false).equals(
-            "setprop cur.appo.light.enabled false && /vendor/bin/hw/projector-test setLightSourceOnOff false && setprop cur.prj.screenOff true"
-            + " && setprop cur.djc.picture_off true || { setprop cur.appo.light.enabled true; false; }") : "off recipe: all or nothing, the note last, the flag put back on failure";
-        assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false && setprop cur.djc.picture_off false || { setprop cur.appo.light.enabled false; false; }") : "on recipe";
+            "prev=$(getprop cur.appo.light.enabled); setprop cur.appo.light.enabled false"
+            + " && { /vendor/bin/hw/projector-test setLightSourceOnOff false || { setprop cur.appo.light.enabled \"$prev\"; false; }; }"
+            + " && setprop cur.prj.screenOff true && setprop cur.djc.picture_off true") : "off recipe: in order, the note last, only a refused HAL call undone (to the flag's own previous value)";
+        assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false && setprop cur.djc.picture_off false") : "on recipe";
+        assert !Projector.pictureScript(true).contains("|| { setprop cur.appo.light.enabled false") : "no rollback to an assumed value";
         assert Projector.pictureScript(false, Projector.HELD_SILENCE).contains("setprop cur.djc.picture_off silence") : "a dark for silence is held as that";
         Projector.State quiet = Projector.parse("held=silence\n");
         assert Boolean.TRUE.equals(quiet.heldOff) && quiet.heldForSilence : "held=silence: held, for silence";
@@ -550,13 +552,13 @@ public final class AuroraPluginTestAccess {
         volatile boolean light = true;
         volatile String held = "";
         volatile boolean halFails;
-        private final java.util.regex.Pattern heldIn = java.util.regex.Pattern.compile("picture_off (\\S+) \\|\\|");
+        private final java.util.regex.Pattern heldIn = java.util.regex.Pattern.compile("picture_off (\\S+)$");
         @Override public Shell.Result run(String script, int timeoutMs) {
             if (script.equals(Projector.POLL_SCRIPT)) {
                 scripts.add(script);
                 return new Shell.Result(0, POLL_ANSWER.replace("light=true", "light=" + light + "\nheld=" + held).replace("screenoff=false", "screenoff=" + !light), "", false);
             }
-            if (script.startsWith("setprop cur.appo.light.enabled ") && script.contains("setLightSourceOnOff")) {
+            if (script.contains("setLightSourceOnOff")) {
                 scripts.add(script);
                 if (halFails) return new Shell.Result(1, "", "HAL refused", false);
                 light = script.contains("setLightSourceOnOff true");

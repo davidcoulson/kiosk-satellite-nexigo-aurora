@@ -62,17 +62,18 @@ final class Projector {
     /** A picture someone asked for: off is held as theirs. */
     static String pictureScript(boolean on) { return pictureScript(on, "true"); }
 
-    /** The light, the vendor's flags and the hold note, all or nothing: each step runs only if
-     *  the one before worked, the note last, and a failure puts the light flag back and fails the
-     *  script, so a HAL that refused is never recorded as a dark (or lit) picture. held is what the
-     *  note says for an off ("true" or HELD_SILENCE); an on clears it. */
+    /** The light, the vendor's flags and the hold note, each step only if the one before worked,
+     *  the note last, and the script fails if any step did, so a refused change is never recorded
+     *  as a dark (or lit) picture. Only a refused HAL call is undone, and only back to the light
+     *  flag's own previous value: after the laser has really changed, a later step failing leaves
+     *  the flag matching the laser (an earlier rollback set it to the opposite of the light). held
+     *  is what the note says for an off ("true" or HELD_SILENCE); an on clears it. */
     static String pictureScript(boolean on, String held) {
         String flag = on ? "true" : "false";
-        return "setprop cur.appo.light.enabled " + flag
-            + " && " + TOOL + " setLightSourceOnOff " + flag
+        return "prev=$(getprop cur.appo.light.enabled); setprop cur.appo.light.enabled " + flag
+            + " && { " + TOOL + " setLightSourceOnOff " + flag + " || { setprop cur.appo.light.enabled \"$prev\"; false; }; }"
             + " && setprop cur.prj.screenOff " + (on ? "false" : "true")
-            + " && setprop " + HELD_PROP + " " + (on ? "false" : held)
-            + " || { setprop cur.appo.light.enabled " + (on ? "false" : "true") + "; false; }";
+            + " && setprop " + HELD_PROP + " " + (on ? "false" : held);
     }
 
     static String ledsScript(int status) {
