@@ -71,9 +71,17 @@ final class Projector {
     static String pictureScript(boolean on, String held) {
         String flag = on ? "true" : "false";
         return "prev=$(getprop cur.appo.light.enabled); setprop cur.appo.light.enabled " + flag
-            + " && { " + TOOL + " setLightSourceOnOff " + flag + " || { setprop cur.appo.light.enabled \"$prev\"; false; }; }"
-            + " && setprop cur.prj.screenOff " + (on ? "false" : "true")
-            + " && setprop " + HELD_PROP + " " + (on ? "false" : held);
+            + " && { " + TOOL + " setLightSourceOnOff " + flag + " && echo " + HAL_DONE + " || { setprop cur.appo.light.enabled \"$prev\"; false; }; }"
+            + " && " + pictureFlagsScript(on, held);
+    }
+
+    /** Printed once the HAL has changed the light, so a script that fails after that is known to
+     *  have changed the picture all the same (the flags are then put right separately). */
+    static final String HAL_DONE = "__aurora_hal_done";
+
+    /** The vendor's screen-off flag and the hold note for a light that has already changed. */
+    static String pictureFlagsScript(boolean on, String held) {
+        return "setprop cur.prj.screenOff " + (on ? "false" : "true") + " && setprop " + HELD_PROP + " " + (on ? "false" : held);
     }
 
     static String ledsScript(int status) {

@@ -14,6 +14,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The smallest ADB client that will do: a shell command over TCP to the projector's own adbd.
@@ -52,41 +58,72 @@ final class Adb {
 
     /** Sockets in use, so stopping the plugin can cut every exchange short (a blocked read does
      *  not notice a thread interrupt; a closed socket ends it at once). */
-    private static final Set<Socket> OPEN = Collections.synchronizedSet(new HashSet<Socket>());
+    private static final Set<Socket> OPEN = new HashSet<>();
+    /** Bumped by cancelAll: an exchange that began before it may not open a socket after it. */
+    private static long epoch;
 
-    /** Closes every exchange in progress; each returns a failure. */
+    /** Closes every exchange in progress, and refuses any that began before this call but had
+     *  not opened its socket yet; each returns a failure. */
     static void cancelAll() {
         Socket[] all;
-        synchronized (OPEN) { all = OPEN.toArray(new Socket[0]); }
+        synchronized (OPEN) { epoch++; all = OPEN.toArray(new Socket[0]); }
         for (Socket s : all) { try { s.close(); } catch (IOException ignored) { /* closing */ } }
     }
 
+    static long epoch() { synchronized (OPEN) { return epoch; } }
+
+    /** Closes a socket at the deadline: SO_TIMEOUT bounds reads only, and a peer that stops
+     *  reading can leave a write blocked for good. */
+    private static final ScheduledExecutorService TIMER = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+        @Override public Thread newThread(Runnable r) { Thread t = new Thread(r, "nexigo-aurora-adb-deadline"); t.setDaemon(true); return t; }
+    });
+
     /** timeoutMs is a deadline for the whole exchange, not for each read: a helper that keeps
      *  printing, or a peer that trickles bytes, still ends on time. */
-    static Shell.Result run(String host, int port, String script, int timeoutMs) {
+    static Shell.Result run(String host, int port, String script, int timeoutMs) { return run(host, port, script, timeoutMs, epoch()); }
+
+    /** began is cancelAll's epoch when the caller's work began (Shell.adb passes it). */
+    static Shell.Result run(String host, int port, String script, int timeoutMs, long began) {
         long deadline = System.nanoTime() + Math.max(1, timeoutMs) * 1_000_000L;
-        Socket socket = new Socket();
-        OPEN.add(socket);
+        final Socket socket = new Socket();
+        synchronized (OPEN) {
+            if (epoch != began) return Shell.Result.failure("stopped");
+            OPEN.add(socket);
+        }
+        final AtomicBoolean expired = new AtomicBoolean();
+        ScheduledFuture<?> guard = TIMER.schedule(new Runnable() { @Override public void run() {
+            expired.set(true);
+            try { socket.close(); } catch (IOException ignored) { /* closing */ }
+        } }, Math.max(1, timeoutMs), TimeUnit.MILLISECONDS);
         try {
             socket.connect(new InetSocketAddress(host, port), Math.max(1, Math.min(timeoutMs, 3000)));
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             DataInputStream in = new DataInputStream(socket.getInputStream());
             send(out, A_CNXN, VERSION, MAX_DATA, "host::\0".getBytes(StandardCharsets.US_ASCII));
-            Packet p = read(in, socket, deadline);
+            Packet p = read(in, socket, deadline, true);
             if (p.cmd == A_AUTH) return Shell.Result.failure("adbd on " + host + ":" + port + " wants a key (ro.adb.secure is on)");
             if (p.cmd != A_CNXN) return Shell.Result.failure("adbd on " + host + ":" + port + " did not connect");
+            // Checksums are optional only once both ends speak 0x01000001; this client offers
+            // 0x01000000, so a real adbd always sends them and every packet is checked.
+            boolean checksums = Math.min(VERSION, p.arg0) < 0x01000001;
             send(out, A_OPEN, LOCAL_ID, 0, (shellService(script) + "\0").getBytes(StandardCharsets.UTF_8));
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             int remote = 0;
             while (true) {
-                p = read(in, socket, deadline);
-                // Only our stream counts; the remote id is learnt from its first OKAY.
+                p = read(in, socket, deadline, checksums);
+                // Only our stream: OKAY then WRTEs from the one remote id it names, CLSE from it
+                // (or, before any OKAY, the CLSE that refuses the open).
                 if (p.arg1 != LOCAL_ID) continue;
-                if (p.cmd == A_OKAY) { if (remote == 0) remote = p.arg0; continue; }
+                if (remote == 0) {
+                    if (p.cmd == A_OKAY) { remote = p.arg0; continue; }
+                    if (p.cmd == A_CLSE) return Shell.Result.failure("adbd on " + host + ":" + port + " refused the shell");
+                    continue;
+                }
+                if (p.arg0 != remote) continue;
+                if (p.cmd == A_OKAY) continue;
                 if (p.cmd == A_WRTE) {
-                    if (remote != 0 && p.arg0 != remote) continue;
                     if (buffer.size() < OUTPUT_CAP) buffer.write(p.data, 0, Math.min(p.data.length, OUTPUT_CAP - buffer.size()));
-                    send(out, A_OKAY, LOCAL_ID, p.arg0, null);
+                    send(out, A_OKAY, LOCAL_ID, remote, null);
                     continue;
                 }
                 if (p.cmd == A_CLSE) break;
@@ -103,9 +140,11 @@ final class Adb {
         } catch (SocketTimeoutException e) {
             return new Shell.Result(-1, "", "timed out", true);
         } catch (IOException e) {
+            if (expired.get()) return new Shell.Result(-1, "", "timed out", true);
             return Shell.Result.failure("adbd on " + host + ":" + port + ": " + e.getMessage());
         } finally {
-            OPEN.remove(socket);
+            guard.cancel(false);
+            synchronized (OPEN) { OPEN.remove(socket); }
             try { socket.close(); } catch (IOException ignored) { /* closing */ }
         }
     }
@@ -126,7 +165,7 @@ final class Adb {
     }
 
     /** One packet, with what is left of the deadline as the socket's timeout before each piece. */
-    static Packet read(DataInputStream in, Socket socket, long deadline) throws IOException {
+    static Packet read(DataInputStream in, Socket socket, long deadline, boolean checksums) throws IOException {
         byte[] head = new byte[24];
         readFully(in, head, socket, deadline);
         ByteBuffer h = ByteBuffer.wrap(head).order(ByteOrder.LITTLE_ENDIAN);
@@ -139,8 +178,7 @@ final class Adb {
         if (length < 0 || length > MAX_DATA) throw new IOException("bad packet length " + length);
         p.data = new byte[length];
         readFully(in, p.data, socket, deadline);
-        // Newer adbd sends 0 (checksums are optional since protocol version 0x01000001).
-        if (checksum != 0) {
+        if (checksums) {
             long sum = 0;
             for (byte b : p.data) sum += b & 0xff;
             if ((int) (sum & 0xffffffffL) != checksum) throw new IOException("bad packet checksum");

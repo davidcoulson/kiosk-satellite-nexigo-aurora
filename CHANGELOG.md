@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Plugin 0.4.5: fixes from Codex's review of 0.4.4. The picture script undoes only a refused HAL
+  call, back to the light flag's own previous value, and marks when the HAL changed the light, so
+  a later failing flag still counts as a change (settled, flags retried). A restart correction
+  that is refused stays owed until it works. The no-signal dark needs the TV app positively in
+  front and an input read just now, and only fresh full signal reads (on the input showing
+  throughout) drive it; a CEC Standby needs the live input too. stop() returns within the host's
+  deadline and its session's channels refuse anything after it; ADB's deadline also ends blocked
+  writes, checksums follow the negotiated version and the stream state is enforced; Shizuku
+  commands are one at a time, 250 ms apart; a timed-out direct script's whole process group is
+  ended (setsid); helper runs with nothing usable count as failures.
+
 - Plugin 0.4.4: fixes from a full review (Codex, 2026-10-12). Picture: the script is all or
   nothing (a refused HAL fails it and puts the light flag back) and the plugin records a change
   only once it worked; every picture change and signal reading runs on one thread, so a manual

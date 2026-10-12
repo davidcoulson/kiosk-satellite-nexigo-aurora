@@ -116,6 +116,17 @@ public final class AuroraPlugin implements KioskPlugin {
     private static final int REDETECT_MAX_S = 300;
     /** Helper runs that failed in a row; a few mean the copy on the projector is not to be trusted. */
     private int vendorFailures;
+    /** The cancel epoch this session began in (see Shell.cancelAll): every channel it uses is
+     *  refused once stop() has moved it on, even a call that was about to start. */
+    private volatile long sessionEpoch;
+    /** directRunner, bound to this session. */
+    private Shell.Runner direct;
+    /** The laser was seen lit while held off, and the Off that should follow has not gone
+     *  through: kept until it does (or the picture is changed), so a refused correction is retried
+     *  rather than forgotten once the evidence for it has been read. */
+    private boolean pendingOff;
+    /** stop() must return inside Kiosk Satellite's callback deadline (3 s). */
+    private static final long STOP_WAIT_MS = 2000;
     private boolean laserPublished;
     /** What cur.prj.currentSourceId said when that input was commanded; a later change means
      *  the projector's own menu was used and wins. */
@@ -164,6 +175,8 @@ public final class AuroraPlugin implements KioskPlugin {
     @Override public void start(PluginHost host, Map<String, Object> settings) {
         startedAt = System.currentTimeMillis();
         this.host = host;
+        sessionEpoch = Shell.epoch();
+        direct = session(directRunner);
         steady.clear();
         tempsPublished.clear();
         redetectSeconds = redetectFirstSeconds;
@@ -224,6 +237,17 @@ public final class AuroraPlugin implements KioskPlugin {
             // Refresh with no channel at all tries to find one now rather than at the next retry.
             if (script == null && runner == null) detect(); else poll();
         } });
+    }
+
+    /** A channel bound to this session: refused once the plugin has stopped. */
+    private Shell.Runner session(final Shell.Runner r) {
+        if (r == null) return null;
+        return new Shell.Runner() {
+            @Override public Shell.Result run(String script, int timeoutMs) {
+                if (!alive.get()) return Shell.Result.failure("stopped");
+                return r.run(script, timeoutMs, sessionEpoch);
+            }
+        };
     }
 
     /** Sets the bar to one of the named patterns and remembers it; the bar has no readback. */
@@ -321,8 +345,14 @@ public final class AuroraPlugin implements KioskPlugin {
         if (vendorWorker != null) vendorWorker.shutdownNow();
         if (worker != null) worker.shutdownNow();
         Shell.cancelAll();
-        if (vendorWorker != null) vendorWorker.awaitTermination(3000, TimeUnit.MILLISECONDS);
-        if (worker != null) worker.awaitTermination(3000, TimeUnit.MILLISECONDS);
+        // One wait for both threads, inside the host's deadline. Work that is still finishing
+        // (a call that ignores interrupts) can no longer reach the projector: every channel is
+        // bound to this session, and the session is over.
+        long until = System.currentTimeMillis() + STOP_WAIT_MS;
+        boolean done = true;
+        if (vendorWorker != null) done &= vendorWorker.awaitTermination(Math.max(0, until - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+        if (worker != null) done &= worker.awaitTermination(Math.max(0, until - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+        if (!done) { try { host.log("Stopped with a call still finishing; it can no longer reach the projector."); } catch (RuntimeException ignored) { /* host gone */ } }
     }
 
     // ---- the work, all on the worker thread ----
@@ -331,7 +361,7 @@ public final class AuroraPlugin implements KioskPlugin {
      *  and the vendor helper: adbd or Shizuku may simply not be up yet after a boot. */
     private boolean channelIncomplete() {
         if (runner == null) return true;
-        return runner == directRunner && extra == null && !CHANNEL_SHIZUKU.equals(String.valueOf(settings.get("channel")));
+        return runner == direct && extra == null && !CHANNEL_SHIZUKU.equals(String.valueOf(settings.get("channel")));
     }
 
     /** Detection again later, backing off, while it keeps coming up short. */
@@ -356,15 +386,15 @@ public final class AuroraPlugin implements KioskPlugin {
         String want = String.valueOf(settings.get("channel"));
         runner = null; extra = null; extraName = null;
         int port = adbPort();
-        Shell.Runner adb = adbFactory.create(port);
+        Shell.Runner adb = session(adbFactory.create(port));
         boolean adbUp = false;
         if (CHANNEL_ADB.equals(want)) {
             adbUp = adbOk(adb);
             if (adbUp) { runner = adb; channelName = "ADB"; }
             else { status("The projector's ADB daemon did not answer on 127.0.0.1:" + port + ". Turn on network ADB, or pick another channel.", true); return; }
         } else if (!CHANNEL_SHIZUKU.equals(want)) {
-            Shell.Result probe = directRunner.run(Projector.PROBE_SCRIPT, 4000);
-            if (probe.ok()) { runner = directRunner; channelName = "direct"; }
+            Shell.Result probe = direct.run(Projector.PROBE_SCRIPT, 4000);
+            if (probe.ok()) { runner = direct; channelName = "direct"; }
             else if (CHANNEL_DIRECT.equals(want)) { status("The kiosk process cannot reach the projector's tools directly (" + probe.why() + "). Try ADB or Shizuku.", true); return; }
         }
         if (runner == null && CHANNEL_AUTO.equals(want)) {
@@ -372,7 +402,7 @@ public final class AuroraPlugin implements KioskPlugin {
             if (adbUp) { runner = adb; channelName = "ADB"; }
         }
         if (runner == null) {
-            if (Shell.shizukuGranted(host)) { runner = shizukuFactory.create(host); channelName = "Shizuku"; }
+            if (Shell.shizukuGranted(host)) { runner = session(shizukuFactory.create(host)); channelName = "Shizuku"; }
             else {
                 status(CHANNEL_SHIZUKU.equals(want)
                     ? "Shizuku is not running or not authorized for Kiosk Satellite."
@@ -382,9 +412,9 @@ public final class AuroraPlugin implements KioskPlugin {
         }
         // The log (temperatures) needs the shell user. Behind a direct channel, the projector's
         // own adbd is the first choice, since it is there after every reboot; Shizuku the second.
-        if (runner == directRunner) {
+        if (runner == direct) {
             if (adbUp || adbOk(adb)) { extra = adb; extraName = "ADB"; }
-            else if (Shell.shizukuGranted(host)) { extra = shizukuFactory.create(host); extraName = "Shizuku"; }
+            else if (Shell.shizukuGranted(host)) { extra = session(shizukuFactory.create(host)); extraName = "Shizuku"; }
         }
         // Shizuku for the other plugins: a loopback ADB session can start it after a reboot, which
         // is the one thing Shizuku cannot do for itself without root.
@@ -494,11 +524,11 @@ public final class AuroraPlugin implements KioskPlugin {
     private void sourceSlept(Projector.Cec c) {
         if (Boolean.FALSE.equals(lastLight) || !foregroundIsTv()) return;
         Integer port = cecPorts.get(c.src);
-        // The input on the wall now, not as of the last poll: someone may have switched since
-        // (2026-10-12 review: HDMI 2's Standby darkened HDMI 3 chosen a moment before).
-        boolean live = readLiveInput();
-        Integer showing = currentPort();
-        if (port != null && (!live || showing == null)) {
+        // The input on the wall now, read now, not as of the last poll or from memory: someone may
+        // have switched since (2026-10-12 review: HDMI 2's Standby darkened HDMI 3 chosen a moment
+        // before), and with no HDMI input held there is nothing of this source's to darken.
+        Integer showing = readLivePort();
+        if (port != null && showing == null) {
             note(Projector.nameOf(c.src, cecNames) + " slept on HDMI " + port + " but the input showing could not be read: picture left on");
             return;
         }
@@ -516,7 +546,19 @@ public final class AuroraPlugin implements KioskPlugin {
      * command changes nothing here, so a retry or the next reading still sees the truth.
      */
     private boolean picture(boolean on, String what, boolean forSilence) {
-        if (!command(Projector.pictureScript(on, forSilence ? Projector.HELD_SILENCE : "true"), what)) return false;
+        if (runner == null) { status("No channel to the projector; check the plugin's settings.", true); return false; }
+        if (!alive.get()) return false;
+        String held = forSilence ? Projector.HELD_SILENCE : "true";
+        Shell.Result r = runner.run(Projector.pictureScript(on, held), Shell.DEFAULT_TIMEOUT_MS);
+        if (!halChanged(r)) { status(what + " failed via " + channelName + ": " + r.why(), true); return false; }
+        if (!r.ok()) {
+            // The light changed and a flag or the hold note did not take: once more for those,
+            // and the change itself still counts (and still settles: the heat read next is from
+            // before it).
+            Shell.Result f = runner.run(Projector.pictureFlagsScript(on, held), Shell.DEFAULT_TIMEOUT_MS);
+            if (!f.ok()) status(what + ": the light changed, but its flags could not be set via " + channelName + " (" + f.why() + ")", true);
+        }
+        pendingOff = false;
         commandedPictureOff = !on;
         darkForSilence = !on && forSilence;
         silentSince = null;
@@ -531,8 +573,10 @@ public final class AuroraPlugin implements KioskPlugin {
      *  signal on the HDMI input in front the picture goes dark - Android and the network stay up -
      *  and it comes back when the signal does, unless someone has touched the picture since.
      *  signal is null when there is no telling (an app in front, or no read). */
-    void watchSignal(final Boolean signal) {
-        final String input = lastShowing;
+    void watchSignal(final Boolean signal) { watchSignal(signal, lastShowing); }
+
+    /** input is what was showing when the signal was sampled, not when the reading arrived. */
+    void watchSignal(final Boolean signal, final String input) {
         submit(new Task() { @Override public void run() { onSignal(signal, input); } });
     }
 
@@ -557,15 +601,22 @@ public final class AuroraPlugin implements KioskPlugin {
         Integer port = Projector.portOf(input == null ? null : input.split(" \u00b7 ")[0]);
         if (silentSince == null || !java.util.Objects.equals(port, silentPort)) { silentSince = now; silentPort = port; return; }
         if (now - silentSince < minutes * silenceMinuteMs) return;
-        // Check again right before acting: the app in front, and the input on the wall, may have
-        // changed since this reading (a queued Off once darkened Plex).
-        if (!foregroundIsTv()) { silentSince = null; return; }
-        if (readLiveInput() && liveInput != null && silentPort != null && !Projector.portOf(liveInput).equals(silentPort)) {
-            silentSince = now; silentPort = Projector.portOf(liveInput); return;
-        }
+        // Check again right before acting, and act only on what is known: the TV app positively in
+        // front (not merely "could not tell"), and an HDMI port read just now that is the one the
+        // silence was on. Anything else waits for a later reading (a queued Off once darkened Plex).
+        Boolean tv = foregroundTv();
+        if (Boolean.FALSE.equals(tv)) { silentSince = null; return; }
+        if (tv == null) return;
+        Integer live = readLivePort();
+        if (live == null) return;
+        if (silentPort != null && !live.equals(silentPort)) { silentSince = now; silentPort = live; return; }
         note("no signal on " + input + " for " + minutes + " min: picture off");
         if (picture(false, "Picture off", true)) poll();
     }
+
+    /** Whether a picture script got as far as changing the light (all of it, or the HAL call
+     *  before a later step failed). */
+    private static boolean halChanged(Shell.Result r) { return r.ok() || r.stdout.contains(Projector.HAL_DONE); }
 
     /** Remote Admin's Overview tiles (two at most) and the Showing sensor. */
     private void publishStatus(Projector.State s) {
@@ -649,6 +700,8 @@ public final class AuroraPlugin implements KioskPlugin {
 
     /** Hook for tests: a helper already in place. */
     void useVendor(String path) { vendorPath = path; }
+
+    String vendorPathForTests() { return vendorPath; }
 
     /** Puts this build's helper on the projector and trusts it only for its content: the copy
      *  there must hash to this DEX before it is ever run. A fresh copy is staged under a name of
@@ -738,6 +791,7 @@ public final class AuroraPlugin implements KioskPlugin {
         Shell.Runner r = cecRunner;
         String path = vendorPath;
         if (r == null || path == null) return;
+        String showingBefore = lastShowing;
         Shell.Result res = r.run(Projector.vendorScript(path, args), VENDOR_TIMEOUT_MS);
         if (!res.ok()) {
             host.log("Vendor helper (" + args + ") failed: " + res.why());
@@ -745,17 +799,32 @@ public final class AuroraPlugin implements KioskPlugin {
             if (++vendorFailures >= 3) { vendorPath = null; vendorFailures = 0; }
             return;
         }
-        vendorFailures = 0;
         Map<String, String> read = Projector.parseVendor(res.stdout);
-        if (read.isEmpty()) return;
+        if (read.isEmpty()) {
+            // Nothing usable (only error lines): a failure like any other, and the old readings
+            // are not passed off as new.
+            host.log("Vendor helper (" + args + ") read nothing: " + res.stdout.trim().replace('\n', ' '));
+            if (++vendorFailures >= 3) { vendorPath = null; vendorFailures = 0; }
+            return;
+        }
+        vendorFailures = 0;
+        // The signal drives the no-signal dark only when this read sampled it (a full read), on
+        // the input that was showing throughout; a quick read's kept value is history.
+        boolean fresh = full && read.containsKey("signal");
+        String sampled = showingBefore != null && showingBefore.equals(lastShowing) ? showingBefore : null;
         if (!full) {
             for (String k : new String[] {"signal", "hdr", "res", "max_cll"}) if (vendor.containsKey(k) && !read.containsKey(k)) read.put(k, vendor.get(k));
         }
         vendor = read;
-        publishVendor(read);
+        publishVendor(read, fresh, sampled, fresh && sampled == null && showingBefore != lastShowing);
     }
 
-    void publishVendor(Map<String, String> v) {
+    /** For tests: a reading published as if it were not a fresh signal sample. */
+    void publishVendor(Map<String, String> v) { publishVendor(v, false, null, false); }
+
+    /** fresh: this read sampled the signal now; sampled: the input showing throughout it; moved:
+     *  the input changed during the read, so its signal belongs to neither. */
+    private void publishVendor(Map<String, String> v, boolean fresh, String sampled, boolean moved) {
         if (!alive.get()) return;
         Integer b = intOf(v.get("brightness"));
         host.publishSelect("brightness_mode", "Laser brightness", Projector.BRIGHTNESS_MODES,
@@ -782,7 +851,11 @@ public final class AuroraPlugin implements KioskPlugin {
         // The signal belongs to the TV app's input: with an app in front there is none to report.
         boolean tvFront = lastShowing == null || lastShowing.startsWith("HDMI");
         if (v.containsKey("signal")) host.publishBinarySensor("signal", "Signal", "", tvFront ? "true".equals(v.get("signal")) : null);
-        watchSignal(tvFront && v.containsKey("signal") ? Boolean.valueOf("true".equals(v.get("signal"))) : null);
+        if (moved) watchSignal(null, null);
+        else if (fresh) {
+            boolean sampledTv = sampled == null || sampled.startsWith("HDMI");
+            watchSignal(sampledTv ? Boolean.valueOf("true".equals(v.get("signal"))) : null, sampled);
+        }
         String format = tvFront ? Projector.videoFormat(v) : null;
         host.publishTextSensor("video_format", "Video format", format == null ? "" : format);
     }
@@ -807,14 +880,19 @@ public final class AuroraPlugin implements KioskPlugin {
         if (alive.get()) host.publishTextSensor("correction", "Last correction", what);
     }
 
-    /** Whether the TV app (an HDMI input) is in front; true when there is no telling (no
-     *  shell-user channel, or no answer), as before an app could be checked for at all. */
-    private boolean foregroundIsTv() {
+    /** TRUE: the TV app (an HDMI input) is in front; FALSE: an app is; null: no telling (no
+     *  shell-user channel, no answer, or nothing resumed). */
+    private Boolean foregroundTv() {
         Shell.Runner r0 = cecRunner;
-        if (r0 == null) return true;
+        if (r0 == null) return null;
         Shell.Result r = r0.run(Projector.FOREGROUND_SCRIPT, 4000);
-        return !r.ok() || r.stdout.trim().isEmpty() || r.stdout.contains(Projector.TV_APP);
+        if (!r.ok() || r.stdout.trim().isEmpty()) return null;
+        return r.stdout.contains(Projector.TV_APP);
     }
+
+    /** For following a source over CEC, "no telling" counts as the TV, as it always has: there
+     *  the live input read that follows is what keeps the wrong input from going dark. */
+    private boolean foregroundIsTv() { return !Boolean.FALSE.equals(foregroundTv()); }
 
     /** The stay-on guard writes a secure setting, which the shell user may and the kiosk process
      *  may not: behind a direct channel the shell-user one does it. */
@@ -895,6 +973,11 @@ public final class AuroraPlugin implements KioskPlugin {
             }
             lightSourceHandledAt = s.lightSourceAt;
         }
+        // A correction that did not go through last time is still owed, evidence or not.
+        if (pendingOff && commandedPictureOff && heatSays == null) {
+            heatSays = Boolean.TRUE;
+            why = "a correction that did not go through";
+        }
         if (heatSays != null && !heatSays.equals(s.light)) {
             note("laser " + (heatSays ? "lit" : "dark") + " behind the flags, by " + why
                 + (lastShowing != null ? "; showing " + lastShowing : ""));
@@ -903,15 +986,19 @@ public final class AuroraPlugin implements KioskPlugin {
                 // service then lights the laser for the Android UI (AT+LightSource=On, 2026-09-26),
                 // flags untouched. The picture was held off from here, so it goes back off.
                 if (!alive.get()) return;
-                if (runner.run(Projector.pictureScript(false, darkForSilence ? Projector.HELD_SILENCE : "true"), Shell.DEFAULT_TIMEOUT_MS).ok()) {
+                if (halChanged(runner.run(Projector.pictureScript(false, darkForSilence ? Projector.HELD_SILENCE : "true"), Shell.DEFAULT_TIMEOUT_MS))) {
                     s.light = Boolean.FALSE;
                     s.screenOff = Boolean.TRUE;
                     settleLight();
+                    pendingOff = false;
                 } else {
+                    // Lit, and said so; the Off is owed until it works or the guard time is over.
                     s.light = Boolean.TRUE;
+                    pendingOff = true;
                 }
             } else {
                 s.light = heatSays;
+                pendingOff = false;
                 if (heatSays) { s.screenOff = Boolean.FALSE; commandedPictureOff = false; darkForSilence = false; }
                 if (!alive.get()) return;
                 runner.run(Projector.reflagLightScript(heatSays), 4000);
@@ -946,17 +1033,20 @@ public final class AuroraPlugin implements KioskPlugin {
         publishStatus(s);
     }
 
-    /** Which HDMI input the TV app holds, through the shell-user channel; false when it could
-     *  not be read (liveInput is then as before). */
-    private boolean readLiveInput() {
+    /** Which HDMI input the TV app holds, through the shell-user channel (for the poll). */
+    private void readLiveInput() { readLivePort(); }
+
+    /** The HDMI port the TV app holds, read now: null when none is held or it could not be read
+     *  (never the remembered or vendor-property input). Updates liveInput when it could be read. */
+    private Integer readLivePort() {
         Shell.Runner r = cecRunner;
-        if (r == null) return false;
+        if (r == null) return null;
         Shell.Result lr = r.run(Projector.LIVE_INPUT_SCRIPT, 4000);
-        if (!lr.ok()) return false;
+        if (!lr.ok()) return null;
         Integer p = Projector.livePort(lr.stdout);
         liveInput = p == null ? null : Projector.INPUTS[p - 1];
         if (liveInput != null) commandedInput = null;   // the projector's own reading replaces the memory
-        return true;
+        return p;
     }
 
     private void fill(Projector.State s, String key, String field) {

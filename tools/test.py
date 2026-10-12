@@ -14,6 +14,8 @@ def tool(name):
 manifest = json.loads((root / 'kiosk-satellite-plugin.json').read_text())
 assert manifest['apiVersion'] == 1 and manifest['id'] == 'nexigo-aurora'
 assert set(manifest['capabilities']) == {'entities', 'shizuku'}
+# Shell.DIRECT uses Process.waitFor(timeout) and destroyForcibly(), API 26.
+assert manifest['minAndroidSdk'] >= 26, 'minAndroidSdk must stay at 26 or above (Shell.DIRECT needs API 26)'
 sources = [*sorted((root / 'sdk/src').rglob('*.java')), *sorted((root / 'src').rglob('*.java')), *sorted((root / 'tests').rglob('*.java'))]
 with tempfile.TemporaryDirectory(prefix='kiosk-plugin-test-') as directory:
     subprocess.run([tool('javac'), '--release', '8', '-Xlint:-options', '-d', directory, *map(str, sources)], check=True)

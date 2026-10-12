@@ -107,10 +107,67 @@ public final class AdbTest {
                 assert out[0] != null && !out[0].ok() && took[0] < 2500 : "cancelled: " + (out[0] == null ? "still running" : out[0].stderr + " after " + took[0] + " ms");
             }
         }
+        // The deadline covers writes too: a peer that stops reading leaves the client's OPEN
+        // write blocked, and the deadline still ends it (SO_TIMEOUT bounds reads only).
+        {
+            StringBuilder huge = new StringBuilder();
+            for (int i = 0; i < 8 * 1024 * 1024; i++) huge.append('x');
+            final String script = huge.toString();
+            final ServerSocket server = new ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress());
+            Thread fake = new Thread(new Runnable() { public void run() {
+                try (Socket s = server.accept()) {
+                    DataInputStream in = new DataInputStream(s.getInputStream());
+                    AdbTestAccess.read(in);
+                    AdbTestAccess.send(new DataOutputStream(s.getOutputStream()), AdbTestAccess.A_CNXN, AdbTestAccess.VERSION, 4096, "device::\0".getBytes(StandardCharsets.US_ASCII));
+                    Thread.sleep(10000);                       // and never reads again
+                } catch (Exception ignored) { /* cut off */ }
+            } });
+            fake.setDaemon(true);
+            fake.start();
+            long t0 = System.currentTimeMillis();
+            AdbTestAccess.Result r = AdbTestAccess.run(server.getLocalPort(), script, 1500);
+            long took = System.currentTimeMillis() - t0;
+            server.close();
+            assert r.timedOut && took < 3500 : "a blocked write ends at the deadline: " + took + " ms, " + r.stderr;
+        }
+        // A zero checksum on a packet with data is checked like any other (this client offers
+        // protocol 0x01000000, so a real adbd always sends checksums).
+        {
+            AdbTestAccess.Result r = serve(new Peer() { public void talk(DataInputStream in, DataOutputStream out) throws Exception {
+                handshake(in, out);
+                byte[] w = packet(AdbTestAccess.A_WRTE, 7, 1, "tampered\n".getBytes(StandardCharsets.UTF_8));
+                w[16] = w[17] = w[18] = w[19] = 0;
+                out.write(w); out.flush();
+                Thread.sleep(500);
+            } }, 3000);
+            assert !r.ok() && r.stderr.contains("checksum") : "a zeroed checksum is refused: " + r.stderr;
+        }
+        // Output before the stream is accepted is not ours; a CLSE before OKAY refuses the open.
+        {
+            AdbTestAccess.Result r = serve(new Peer() { public void talk(DataInputStream in, DataOutputStream out) throws Exception {
+                AdbTestAccess.read(in);
+                AdbTestAccess.send(out, AdbTestAccess.A_CNXN, AdbTestAccess.VERSION, 4096, "device::\0".getBytes(StandardCharsets.US_ASCII));
+                AdbTestAccess.Packet open = AdbTestAccess.read(in);
+                AdbTestAccess.send(out, AdbTestAccess.A_WRTE, 7, open.arg0, "early\n".getBytes(StandardCharsets.UTF_8));
+                AdbTestAccess.send(out, AdbTestAccess.A_OKAY, 7, open.arg0, null);
+                AdbTestAccess.send(out, AdbTestAccess.A_WRTE, 7, open.arg0, ("ours\n" + AdbTestAccess.MARK + "0\n").getBytes(StandardCharsets.UTF_8));
+                AdbTestAccess.read(in);
+                AdbTestAccess.send(out, AdbTestAccess.A_CLSE, 7, open.arg0, null);
+            } }, 3000);
+            assert r.ok() && r.stdout.equals("ours\n") : "only output after the OKAY: " + r.stdout;
+            AdbTestAccess.Result refused = serve(new Peer() { public void talk(DataInputStream in, DataOutputStream out) throws Exception {
+                AdbTestAccess.read(in);
+                AdbTestAccess.send(out, AdbTestAccess.A_CNXN, AdbTestAccess.VERSION, 4096, "device::\0".getBytes(StandardCharsets.US_ASCII));
+                AdbTestAccess.Packet open = AdbTestAccess.read(in);
+                AdbTestAccess.send(out, AdbTestAccess.A_CLSE, 0, open.arg0, null);
+                Thread.sleep(300);
+            } }, 3000);
+            assert !refused.ok() && refused.stderr.contains("refused the shell") : "a refused open: " + refused.stderr;
+        }
         // Nothing listening: a failure, not a hang.
         me.jxl.kiosk.plugins.aurora.AdbTestAccess.Result none = AdbTestAccess.run(1, "id", 1500);
         assert !none.ok() && !none.stderr.isEmpty() : "a closed port fails with a reason";
-        System.out.println("PASS: loopback ADB client - connect, open shell, collect output, exit code, closed port, whole-exchange deadline, AUTH, bad magic, fragments, stray streams, cancellation.");
+        System.out.println("PASS: loopback ADB client - connect, open shell, collect output, exit code, closed port, whole-exchange deadline, AUTH, bad magic, fragments, stray streams, cancellation, write deadline, checksums, stream state.");
     }
 
     interface Peer { void talk(DataInputStream in, DataOutputStream out) throws Exception; }

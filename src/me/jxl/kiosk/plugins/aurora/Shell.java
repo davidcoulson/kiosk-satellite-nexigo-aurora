@@ -45,7 +45,14 @@ final class Shell {
     /** How a script is run. Tests substitute their own. */
     interface Runner {
         Result run(String script, int timeoutMs);
+
+        /** The same for work that began at cancel epoch began (see {@link #cancelAll}): refused
+         *  once a cancel has come since, even if it has not started a process or socket yet. */
+        default Result run(String script, int timeoutMs, long began) { return run(script, timeoutMs); }
     }
+
+    /** The cancel epoch now; a session records it when it starts. */
+    static long epoch() { return Adb.epoch(); }
 
     static final class Result {
         final int exitCode;
@@ -84,16 +91,26 @@ final class Shell {
      *  killed with everything it started: destroying the shell alone left a projector-test blocked
      *  in the HAL behind it. */
     static final Runner DIRECT = new Runner() {
-        @Override public Result run(String script, int timeoutMs) {
+        @Override public Result run(String script, int timeoutMs) { return run(script, timeoutMs, epoch()); }
+
+        @Override public Result run(String script, int timeoutMs, long began) {
+            if (epoch() != began) return Result.failure("stopped");
             Process p;
             try {
-                p = new ProcessBuilder("/system/bin/sh", "-c", "echo " + PID_MARK + "$$; " + script).start();
+                String body = "echo " + PID_MARK + "$$; " + script;
+                // Its own session, so the shell's pid is the process group of everything it starts
+                // (the HAL call in a poll is a grandchild, inside a pipeline in a $( )), and a
+                // timeout can end the lot. A Java child is never a group leader, so setsid execs in
+                // place rather than forking away from the Process this waits on.
+                p = (SETSID ? new ProcessBuilder(SETSID_PATH, "/system/bin/sh", "-c", body) : new ProcessBuilder("/system/bin/sh", "-c", body)).start();
             } catch (IOException e) {
                 return Result.failure("could not start a shell: " + e.getMessage());
             }
             Drain out = new Drain(p.getInputStream());
             Drain err = new Drain(p.getErrorStream());
             RUNNING.put(p, out);
+            // A cancel that came while this was starting has not seen it: end it here.
+            if (epoch() != began) { RUNNING.remove(p); kill(p, out); return Result.failure("stopped"); }
             try {
                 try { p.getOutputStream().close(); } catch (IOException ignored) { /* nothing to write */ }
                 out.start();
@@ -137,12 +154,20 @@ final class Shell {
         catch (NumberFormatException e) { return 0; }
     }
 
-    /** The shell's children first (pkill -P), then the shell. */
+    static final String SETSID_PATH = "/system/bin/setsid";
+    private static final boolean SETSID = new java.io.File(SETSID_PATH).canExecute();
+
+    /** What ends a timed-out script: its whole process group when it has its own session, else
+     *  (no setsid) its direct children; then the shell itself. */
+    static String killScript(int pid, boolean group) {
+        return (group ? "kill -9 -- -" + pid + " 2>/dev/null; " : "") + "pkill -9 -P " + pid + " 2>/dev/null; true";
+    }
+
     private static void kill(Process p, Drain out) {
         int pid = pidOf(out.text());
         if (pid > 0) {
             try {
-                Process k = new ProcessBuilder("/system/bin/sh", "-c", "pkill -9 -P " + pid + " 2>/dev/null; true").start();
+                Process k = new ProcessBuilder("/system/bin/sh", "-c", killScript(pid, SETSID)).start();
                 k.waitFor(2000, TimeUnit.MILLISECONDS);
                 k.destroyForcibly();
             } catch (IOException | InterruptedException ignored) { /* the shell goes below regardless */ }
@@ -150,18 +175,52 @@ final class Shell {
         p.destroyForcibly();
     }
 
-    /** Ends every direct script and ADB exchange in progress (the plugin is stopping). */
+    /** Ends every direct script and ADB exchange in progress and refuses any that began before
+     *  this call (the plugin is stopping). The epoch moves first, so a script registering as this
+     *  runs either is in the snapshot or sees the new epoch and ends itself. */
     static void cancelAll() {
+        Adb.cancelAll();
         Map.Entry<?, ?>[] all;
         synchronized (RUNNING) { all = RUNNING.entrySet().toArray(new Map.Entry<?, ?>[0]); }
         for (Map.Entry<?, ?> e : all) kill((Process) e.getKey(), (Drain) e.getValue());
-        Adb.cancelAll();
     }
+
+    /** Kiosk Satellite runs one Shizuku command per plugin at a time and wants 250 ms between
+     *  starts (PluginShizuku.kt); a second one is refused, not queued. Every thread here (the
+     *  worker, the vendor helper's) goes through this lock, one at a time, spaced out. */
+    private static final java.util.concurrent.locks.ReentrantLock SHIZUKU = new java.util.concurrent.locks.ReentrantLock(true);
+    private static long shizukuLastStart;
+    static final long SHIZUKU_SPACING_MS = 250;
+    /** How long a command may wait its turn: behind the longest one there is (the helper's read). */
+    static final long SHIZUKU_QUEUE_MS = 35000;
 
     /** The same script through Kiosk Satellite's Shizuku connection, as the shell user. */
     static Runner shizuku(final PluginHost host) {
         return new Runner() {
-            @Override public Result run(String script, int timeoutMs) {
+            @Override public Result run(String script, int timeoutMs) { return run(script, timeoutMs, epoch()); }
+
+            @Override public Result run(String script, int timeoutMs, long began) {
+                try {
+                    if (!SHIZUKU.tryLock(SHIZUKU_QUEUE_MS, TimeUnit.MILLISECONDS)) return Result.failure("Shizuku busy: another command is still running");
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return Result.failure("interrupted");
+                }
+                try {
+                    long wait = shizukuLastStart + SHIZUKU_SPACING_MS - System.currentTimeMillis();
+                    if (wait > 0) Thread.sleep(wait);
+                    if (epoch() != began) return Result.failure("stopped");
+                    shizukuLastStart = System.currentTimeMillis();
+                    return once(script, timeoutMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return Result.failure("interrupted");
+                } finally {
+                    SHIZUKU.unlock();
+                }
+            }
+
+            private Result once(String script, int timeoutMs) {
                 final AtomicReference<Result> result = new AtomicReference<>();
                 final CountDownLatch done = new CountDownLatch(1);
                 try {
@@ -203,7 +262,8 @@ final class Shell {
     /** The script through the projector's own adbd on the loopback address, as the shell user. */
     static Runner adb(final int port) {
         return new Runner() {
-            @Override public Result run(String script, int timeoutMs) { return Adb.run("127.0.0.1", port, script, timeoutMs); }
+            @Override public Result run(String script, int timeoutMs) { return Adb.run("127.0.0.1", port, script, timeoutMs, Adb.epoch()); }
+            @Override public Result run(String script, int timeoutMs, long began) { return Adb.run("127.0.0.1", port, script, timeoutMs, began); }
         };
     }
 
