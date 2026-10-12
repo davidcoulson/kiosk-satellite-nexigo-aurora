@@ -72,6 +72,7 @@ public final class AuroraPluginTestAccess {
         cec();
         staleLightSource();
         cpu();
+        steady();
         guard();
         framework();
         arcAudio();
@@ -525,13 +526,32 @@ public final class AuroraPluginTestAccess {
         waitFor(host, "picture");
         assert !host.sensors.containsKey("cpu_busy") : "one read gives no share";
         refreshAnswer(plugin, shell, POLL_ANSWER + "cpu=cpu  130 0 70 1040 60 0 0 0 0 0\n");
-        assert Math.abs((Double) host.sensors.get("cpu_busy") - 50.0 / 3) < 1e-9 : "cpu busy: " + host.sensors.get("cpu_busy");
+        assert Double.valueOf(17).equals(host.sensors.get("cpu_busy")) : "cpu busy, whole percent (16.7 read): " + host.sensors.get("cpu_busy");
         assert host.tiles.get("projector").endsWith("\u00b7 CPU 17%") : "tile: " + host.tiles.get("projector");
         plugin.stop();
     }
 
     /** A light-source command older than the plugin's own last picture command is ignored: the
      *  newer one was pruned from the log. */
+    /** Wobble inside the step stays home; a real move, unknown, or old age goes out. */
+    static void steady() {
+        Steady st = new Steady();
+        long t = 1_000_000;
+        assert st.due("fan1_rpm", 1096.0, 50, 1800_000, t) : "the first reading always goes";
+        assert !st.due("fan1_rpm", 1112.0, 50, 1800_000, t + 60_000) : "16 rpm of jitter stays out";
+        assert !st.due("fan1_rpm", 1081.0, 50, 1800_000, t + 120_000) : "jitter is measured from the value sent, not the last read";
+        assert st.due("fan1_rpm", 1150.0, 50, 1800_000, t + 180_000) : "a 54 rpm move goes";
+        assert !st.due("fan1_rpm", 1160.0, 50, 1800_000, t + 240_000) : "and becomes the new reference";
+        assert st.due("fan1_rpm", 1160.0, 50, 1800_000, t + 180_000 + 1800_000) : "half an hour on, the current value goes anyway";
+        assert st.due("fan1_rpm", null, 50, 1800_000, t + 3_700_000) : "turning unknown goes";
+        assert !st.due("fan1_rpm", null, 50, 1800_000, t + 9_000_000) : "staying unknown does not";
+        assert st.due("fan1_rpm", 1100.0, 50, 1800_000, t + 9_060_000) : "coming back goes";
+        assert st.due("laser_hours", 571.7, 0.05, 3600_000, t) && !st.due("laser_hours", 571.7, 0.05, 3600_000, t + 60_000)
+            && st.due("laser_hours", 571.8, 0.05, 3600_000, t + 360_000) : "laser hours go on every tenth";
+        st.clear();
+        assert st.due("fan1_rpm", 1100.0, 50, 1800_000, t + 9_120_000) : "a fresh start sends everything again";
+    }
+
     static void staleLightSource() throws Exception {
         FakeShell shell = new FakeShell();
         FakeHost host = new FakeHost();

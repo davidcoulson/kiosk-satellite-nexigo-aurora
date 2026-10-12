@@ -61,6 +61,8 @@ public final class AuroraPlugin implements KioskPlugin {
     private String lastProjectorTile, lastShowingTile;
     private boolean tilesSupported = true;
     private long lastCpuBusy, lastCpuTotal;
+    /** What each measured sensor last sent, so wobble within a step stays out of HA's recorder. */
+    private final Steady steady = new Steady();
     private Map<String, Object> settings = new HashMap<>();
     private Shell.Runner runner;
     private String channelName = "no channel";
@@ -142,6 +144,7 @@ public final class AuroraPlugin implements KioskPlugin {
     @Override public void start(PluginHost host, Map<String, Object> settings) {
         startedAt = System.currentTimeMillis();
         this.host = host;
+        steady.clear();
         this.settings = new HashMap<>(settings);
         alive.set(true);
         worker = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
@@ -459,7 +462,9 @@ public final class AuroraPlugin implements KioskPlugin {
             cpu = Projector.cpuPercent(lastCpuBusy, lastCpuTotal, s.cpuBusy, s.cpuTotal);
             lastCpuBusy = s.cpuBusy;
             lastCpuTotal = s.cpuTotal;
-            if (cpu != null) host.publishSensor("cpu_busy", "CPU busy", sensorMeta("%", null, "measurement", 0), cpu);
+            // Whole percent, sent on a move of 5 points (or every 5 minutes): idle use wobbles a
+            // few points every poll, and each new value was a recorder row.
+            if (cpu != null) publishMeasured("cpu_busy", "CPU busy", sensorMeta("%", null, "measurement", 0), (double) Math.round(cpu), 5, 5 * MINUTE);
         }
         String[] projector = Projector.projectorTile(s.light, Projector.hottestLaser(s), s.fanPercent, cpu);
         String showing = null;
@@ -641,7 +646,9 @@ public final class AuroraPlugin implements KioskPlugin {
             String[] f = fans.split(",");
             for (int i = 0; i < f.length; i++) {
                 Integer rpm = intOf(f[i]);
-                if (rpm != null) host.publishSensor("fan" + (i + 1) + "_rpm", "Fan " + (i + 1), sensorMeta("rpm", null, "measurement", 0), rpm.doubleValue());
+                // The tachometers jitter 10-20 rpm at a steady speed: sent on a move of 50 rpm, or
+                // every 30 minutes. Fan speed (%) is the one to watch; these are diagnostics.
+                if (rpm != null) publishMeasured("fan" + (i + 1) + "_rpm", "Fan " + (i + 1), sensorMeta("rpm", null, "measurement", 0), rpm.doubleValue(), 50, 30 * MINUTE);
             }
         }
         // The signal belongs to the TV app's input: with an app in front there is none to report.
@@ -828,18 +835,19 @@ public final class AuroraPlugin implements KioskPlugin {
             note(s.eyeProtect ? "eye protection tripped: the body sensor has the light off" : "eye protection cleared");
         }
         if (s.eyeProtect != null) lastEyeProtect = s.eyeProtect;
-        host.publishSensor("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1),
-            s.laserMinutes == null ? null : s.laserMinutes / 60.0);
+        // Tenths of an hour, so a lit laser adds a row every 6 minutes rather than every minute.
+        publishMeasured("laser_hours", "Laser hours", sensorMeta("h", "duration", "total_increasing", 1),
+            s.laserMinutes == null ? null : Math.round(s.laserMinutes / 6.0) / 10.0, 0.05, HOUR);
         // The speed appothermal commands (the same on every fan PWM); the fans have no tachometer.
         if (s.fanPercent != null || fanPublished) {
-            host.publishSensor("fan_speed", "Fan speed", sensorMeta("%", null, "measurement", 0),
-                s.fanPercent == null ? null : s.fanPercent.doubleValue());
+            publishMeasured("fan_speed", "Fan speed", sensorMeta("%", null, "measurement", 0),
+                s.fanPercent == null ? null : s.fanPercent.doubleValue(), 1, 30 * MINUTE);
             fanPublished = true;
         }
         // One number for the light engine's heat: whichever laser bank runs warmest.
         Double laser = Projector.hottestLaser(s);
         if (laser != null || laserPublished) {
-            host.publishSensor("laser_temp", "Laser temperature", sensorMeta("°C", "temperature", "measurement", 0), laser);
+            publishMeasured("laser_temp", "Laser temperature", sensorMeta("°C", "temperature", "measurement", 0), wholeDegrees(laser), TEMP_STEP, 30 * MINUTE);
             laserPublished = true;
         }
         for (String[] t : Projector.TEMPERATURES) {
@@ -847,7 +855,7 @@ public final class AuroraPlugin implements KioskPlugin {
             // Only publish a temperature the projector has ever reported, so a channel that cannot
             // read the log does not fill Home Assistant with eight unknown sensors.
             if (value != null || s.temperatures.containsKey(t[0])) {
-                host.publishSensor("temp_" + t[1], t[2] + " temperature", sensorMeta("°C", "temperature", "measurement", 0), value);
+                publishMeasured("temp_" + t[1], t[2] + " temperature", sensorMeta("°C", "temperature", "measurement", 0), wholeDegrees(value), TEMP_STEP, 30 * MINUTE);
             }
         }
         StringBuilder text = new StringBuilder();
@@ -870,6 +878,17 @@ public final class AuroraPlugin implements KioskPlugin {
         if (!switchPublished) text.append(". The Picture switch appears once the light state has been read.");
         status(text.toString(), false);
     }
+
+    private static final long MINUTE = 60_000, HOUR = 60 * MINUTE;
+    /** Temperatures go out on a 2 °C move: a sensor on the edge of a degree flips every read. */
+    private static final double TEMP_STEP = 2;
+
+    /** A measurement through {@link Steady}: sent only on a real move, or once it is maxAgeMs old. */
+    private void publishMeasured(String key, String name, Map<String, Object> meta, Double value, double step, long maxAgeMs) {
+        if (steady.due(key, value, step, maxAgeMs, System.currentTimeMillis())) host.publishSensor(key, name, meta, value);
+    }
+
+    private static Double wholeDegrees(Double c) { return c == null ? null : (double) Math.round(c); }
 
     private static Map<String, Object> sensorMeta(String unit, String deviceClass, String stateClass, int decimals) {
         Map<String, Object> m = new LinkedHashMap<>();
