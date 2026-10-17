@@ -108,7 +108,15 @@ firmware's `appothermal` runs those from the same temperatures.
 
 ### Install
 
-1. Kiosk Satellite on the projector, with its ESPHome device added to Home Assistant.
+1. Kiosk Satellite on the projector, with its ESPHome device added to Home Assistant. The
+   projector is 32-bit only (`ro.product.cpu.abilist=armeabi-v7a,armeabi`): use the universal
+   APK or a build made with `flutter build apk --release --target-platform android-arm`. An
+   arm64 build installs without complaint (one stray 32-bit library satisfies the package
+   manager) and then crashes at every start, which takes this plugin with it while its stay-on
+   guards persist on the projector: the vendor sleep timer and the no-signal shutdown stay off,
+   so a dark source leaves the laser lit until someone notices. Home Assistant shows it as the
+   device going unavailable and the Picture switch with it. That is how the projector ran from
+   2026-10-13 to 2026-10-17.
 2. **Plugin Manager > Add plugin**, this repository's URL, **Trust and install**, then enable it.
    (Or **Developer Tools > Install from ZIP** with a local build from `python3 tools/build.py`.)
 3. Picture mode and the no-signal shutdown are `Settings.Global` writes, which need
