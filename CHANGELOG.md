@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Plugin 0.4.8: adds an icon for Community Plugins and Browse plugins.
+
 - Plugin 0.4.7: owed flags are written only after the read has settled the light, and only
   while it is still the light they were for; once it has changed (a remote key, a source, the
   heat), they are dropped rather than written over it.
