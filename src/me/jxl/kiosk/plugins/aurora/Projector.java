@@ -555,9 +555,9 @@ final class Projector {
 
     /** How often the CEC history is read. */
     static final long CEC_POLL_MS = 2000L;
-    /** Line 1: the power menu's newest opening in the log (epoch time; empty when none). Line 2:
-     *  Android's last user activity, which every remote key (not an adb-injected one's absence) updates. */
-    static final String KEYS_SCRIPT = "M=$(logcat -d -v epoch -s ShutdownPageService:D 2>/dev/null | grep 'ShutdownPage oncreate' | tail -n 1 | tr -s ' ' | cut -d' ' -f2); echo \"$M\"; dumpsys power 2>/dev/null | grep -o 'mLastUserActivityTime=.*'";
+    /** Line 1: the vendor's power-menu flag ("true" while the menu is open: Power was pressed).
+     *  Line 2: Android's last user activity, which every remote key updates. */
+    static final String KEYS_SCRIPT = "getprop cur.prj.inShutdownPage; dumpsys power 2>/dev/null | grep -o 'mLastUserActivityTime=.*'";
     /** Short, so the menu is closed before a second press can reach its Power Off row. */
     static final long POWER_POLL_MS = 700L;
     /** A key this recent (a little over a poll) is a press since the last read. */

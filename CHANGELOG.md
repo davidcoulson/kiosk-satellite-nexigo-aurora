@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Plugin 0.4.10: Power is told by the vendor menu flag (cur.prj.inShutdownPage) being up; 0.4.9 looked for a log line that is only written when the menu service first starts.
+
 - Plugin 0.4.9: the Bluetooth remote reaches nothing that lights the laser, and its Power key opens the vendor menu whose Power Off row drops the network. Now a menu opening is Power (menu closed, picture toggled) and any other remote key lights a dark picture.
 
 - Plugin 0.4.8: adds an icon for Community Plugins and Browse plugins.

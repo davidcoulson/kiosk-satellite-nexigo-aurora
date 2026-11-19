@@ -41,7 +41,7 @@ public final class AuroraPlugin implements KioskPlugin {
     /** Reads the HDMI-CEC history every few seconds on a shell-user channel (see watchCec). */
     private ScheduledFuture<?> cecWatch;
     private ScheduledFuture<?> powerWatch;
-    /** Time of the newest power-menu opening seen; null until the first read (a baseline). */
+    /** The power-menu flag last read; null until the first read (a baseline for the key age). */
     private String powerMenuSeen;
     private long keysIgnoredUntil;
     /** The vendor helper's own thread: its full read takes about ten seconds (MediaTek's TV
@@ -467,7 +467,7 @@ public final class AuroraPlugin implements KioskPlugin {
 
     /** The Bluetooth remote reaches neither the vendor's relight handler nor anything else that
      *  lights the laser, and its Power key opens the power menu, whose Power Off row drops the
-     *  network. So: a menu opening is Power (close it, toggle the picture), and any other key while
+     *  network. So: the menu being open is Power (close it, toggle the picture), and any other key while
      *  the picture is dark relights it. Keys are told apart by Android's last-user-activity age. */
     private void readKeys() {
         Shell.Runner r = cecRunner;
@@ -482,7 +482,7 @@ public final class AuroraPlugin implements KioskPlugin {
         long now = System.currentTimeMillis();
         if (before == null || now < keysIgnoredUntil) return; // baseline, or our own key press
         boolean dark = Boolean.FALSE.equals(lastLight);
-        if (!menu.isEmpty() && !menu.equals(before)) {
+        if ("true".equals(menu)) {
             keysIgnoredUntil = now + Projector.KEYS_QUIET_MS;
             runner.run("input keyevent 4", 4000);
             picture(dark, "Power key", false);
