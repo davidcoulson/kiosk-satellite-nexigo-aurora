@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Plugin 0.4.9: the Bluetooth remote reaches nothing that lights the laser, and its Power key opens the vendor menu whose Power Off row drops the network. Now a menu opening is Power (menu closed, picture toggled) and any other remote key lights a dark picture.
+
 - Plugin 0.4.8: adds an icon for Community Plugins and Browse plugins.
 
 - Plugin 0.4.7: owed flags are written only after the read has settled the light, and only

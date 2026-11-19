@@ -555,6 +555,24 @@ final class Projector {
 
     /** How often the CEC history is read. */
     static final long CEC_POLL_MS = 2000L;
+    /** Line 1: the power menu's newest opening in the log (epoch time; empty when none). Line 2:
+     *  Android's last user activity, which every remote key (not an adb-injected one's absence) updates. */
+    static final String KEYS_SCRIPT = "M=$(logcat -d -v epoch -s ShutdownPageService:D 2>/dev/null | grep 'ShutdownPage oncreate' | tail -n 1 | tr -s ' ' | cut -d' ' -f2); echo \"$M\"; dumpsys power 2>/dev/null | grep -o 'mLastUserActivityTime=.*'";
+    /** Short, so the menu is closed before a second press can reach its Power Off row. */
+    static final long POWER_POLL_MS = 700L;
+    /** A key this recent (a little over a poll) is a press since the last read. */
+    static final long KEYS_RECENT_MS = 1500L;
+    /** After the plugin's own change (its injected Back counts as activity too). */
+    static final long KEYS_QUIET_MS = 3000L;
+
+    private static final Pattern AGO = Pattern.compile("\\((\\d+) ms ago\\)");
+
+    /** The age in ms from a {@code mLastUserActivityTime=N (M ms ago)} line; max when unreadable
+     *  (an unparsable dump keeps a dark projector dark rather than lighting it). */
+    static long activityAgoMs(String line) {
+        Matcher m = AGO.matcher(line == null ? "" : line);
+        return m.find() ? Long.parseLong(m.group(1)) : Long.MAX_VALUE;
+    }
 
     private static final Pattern CEC_LINE = Pattern.compile(
         "^\\s*\\[([RS])\\] time=(\\S+ \\S+) message=<([^>]+)> src: (\\d+), dst: (\\d+)(?:, params: ([0-9A-Fa-f ]+))?");

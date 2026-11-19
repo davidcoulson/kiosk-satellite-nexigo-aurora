@@ -40,6 +40,10 @@ public final class AuroraPlugin implements KioskPlugin {
     private ScheduledFuture<?> polling;
     /** Reads the HDMI-CEC history every few seconds on a shell-user channel (see watchCec). */
     private ScheduledFuture<?> cecWatch;
+    private ScheduledFuture<?> powerWatch;
+    /** Time of the newest power-menu opening seen; null until the first read (a baseline). */
+    private String powerMenuSeen;
+    private long keysIgnoredUntil;
     /** The vendor helper's own thread: its full read takes about ten seconds (MediaTek's TV
      *  library starting), which must not hold up the polls or the CEC watch. */
     private ScheduledExecutorService vendorWorker;
@@ -347,6 +351,7 @@ public final class AuroraPlugin implements KioskPlugin {
         alive.set(false);
         if (polling != null) polling.cancel(false);
         if (cecWatch != null) cecWatch.cancel(false);
+        if (powerWatch != null) powerWatch.cancel(false);
         if (vendorReads != null) vendorReads.cancel(false);
         if (redetect != null) redetect.cancel(false);
         if (vendorWorker != null) vendorWorker.shutdownNow();
@@ -453,6 +458,39 @@ public final class AuroraPlugin implements KioskPlugin {
         cecWatch = worker.scheduleWithFixedDelay(new Runnable() {
             @Override public void run() { safe(new Task() { @Override public void run() { readCec(); } }); }
         }, 0, Projector.CEC_POLL_MS, TimeUnit.MILLISECONDS);
+        if (powerWatch != null) powerWatch.cancel(false);
+        powerMenuSeen = null;
+        powerWatch = worker.scheduleWithFixedDelay(new Runnable() {
+            @Override public void run() { safe(new Task() { @Override public void run() { readKeys(); } }); }
+        }, 0, Projector.POWER_POLL_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /** The Bluetooth remote reaches neither the vendor's relight handler nor anything else that
+     *  lights the laser, and its Power key opens the power menu, whose Power Off row drops the
+     *  network. So: a menu opening is Power (close it, toggle the picture), and any other key while
+     *  the picture is dark relights it. Keys are told apart by Android's last-user-activity age. */
+    private void readKeys() {
+        Shell.Runner r = cecRunner;
+        if (r == null) return;
+        Shell.Result l = r.run(Projector.KEYS_SCRIPT, 4000);
+        if (!l.ok()) return;
+        String[] lines = l.stdout.split("\n");
+        String menu = lines.length > 0 ? lines[0].trim() : "";
+        long ago = lines.length > 1 ? Projector.activityAgoMs(lines[1]) : Long.MAX_VALUE;
+        String before = powerMenuSeen;
+        powerMenuSeen = menu;
+        long now = System.currentTimeMillis();
+        if (before == null || now < keysIgnoredUntil) return; // baseline, or our own key press
+        boolean dark = Boolean.FALSE.equals(lastLight);
+        if (!menu.isEmpty() && !menu.equals(before)) {
+            keysIgnoredUntil = now + Projector.KEYS_QUIET_MS;
+            runner.run("input keyevent 4", 4000);
+            picture(dark, "Power key", false);
+            keysIgnoredUntil = System.currentTimeMillis() + Projector.KEYS_QUIET_MS;
+        } else if (dark && ago < Projector.KEYS_RECENT_MS) {
+            picture(true, "Remote key", false);
+            keysIgnoredUntil = System.currentTimeMillis() + Projector.KEYS_QUIET_MS;
+        }
     }
 
     private void readCec() {

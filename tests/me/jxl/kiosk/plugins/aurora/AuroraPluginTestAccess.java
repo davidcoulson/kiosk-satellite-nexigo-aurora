@@ -183,6 +183,7 @@ public final class AuroraPluginTestAccess {
             "prev=$(getprop cur.appo.light.enabled); setprop cur.appo.light.enabled false"
             + " && { /vendor/bin/hw/projector-test setLightSourceOnOff false && echo " + Projector.HAL_DONE + " || { setprop cur.appo.light.enabled \"$prev\"; false; }; }"
             + " && setprop cur.prj.screenOff true && setprop cur.djc.picture_off true") : "off recipe: in order, the note last, only a refused HAL call undone (to the flag's own previous value)";
+        assert Projector.activityAgoMs("mLastUserActivityTime=321924 (910 ms ago)") == 910 && Projector.activityAgoMs("") == Long.MAX_VALUE : "key age";
         assert Projector.pictureScript(true).endsWith("setprop cur.prj.screenOff false && setprop cur.djc.picture_off false") : "on recipe";
         assert !Projector.pictureScript(true).contains("|| { setprop cur.appo.light.enabled false") : "no rollback to an assumed value";
         assert Projector.pictureScript(false, Projector.HELD_SILENCE).contains("setprop cur.djc.picture_off silence") : "a dark for silence is held as that";
