@@ -485,7 +485,8 @@ public final class AuroraPlugin implements KioskPlugin {
         if ("true".equals(menu)) {
             keysIgnoredUntil = now + Projector.KEYS_QUIET_MS;
             runner.run("input keyevent 4", 4000);
-            picture(dark, "Power key", false);
+            // Going dark pauses the show (the pause key, not play/pause): nothing plays to a dark room.
+            if (picture(dark, "Power key", false) && !dark) runner.run("input keyevent 127", 4000);
             keysIgnoredUntil = System.currentTimeMillis() + Projector.KEYS_QUIET_MS;
         } else if (dark && ago < Projector.KEYS_RECENT_MS) {
             picture(true, "Remote key", false);
